@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head><style>body { font-family: sans-serif; }</style></head>
+<body>
+    <h2>Invoice #{{ invoice.id }}</h2>
+    <p>Client: {{ invoice.client_name }}<br>
+       Email: {{ invoice.client_email }}<br>
+       Address: {{ invoice.client_address }}</p>
+
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr><th>Description</th><th>Qty</th><th>Rate</th><th>Total</th></tr>
+        {% set subtotal = 0 %}
+        {% for item in invoice.items %}
+        {% set total = item.quantity * item.rate %}
+        {% set subtotal = subtotal + total %}
+        <tr>
+            <td>{{ item.description }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>${{ '%.2f' % item.rate }}</td>
+            <td>${{ '%.2f' % total }}</td>
+        </tr>
+        {% endfor %}
+        <tr><td colspan="3">Subtotal</td><td>${{ '%.2f' % subtotal }}</td></tr>
+        <tr><td colspan="3">Tax</td><td>${{ '%.2f' % (subtotal * invoice.tax / 100) }}</td></tr>
+        <tr><td colspan="3"><strong>Total</strong></td><td><strong>${{ '%.2f' % (subtotal * (1 + invoice.tax / 100)) }}</strong></td></tr>
+    </table>
+</body>
+</html>

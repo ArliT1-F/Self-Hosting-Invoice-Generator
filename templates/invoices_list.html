@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<a href="/create">+ Create Invoice</a>
+<ul>
+    {% for inv in invoices %}
+    <li>
+        Invoice {{ inv.id }} — {{ inv.client_name }} — 
+        <a href="/invoice/{{ inv.id }}/pdf">Download PDF</a>
+    </li>
+    {% endfor %}
+</ul>
+{% endblock %}
