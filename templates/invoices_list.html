@@ -4,9 +4,10 @@
 <ul>
     {% for inv in invoices %}
     <li>
-        Invoice {{ inv.id }} — {{ inv.client_name }} — 
-        <a href="/invoice/{{ inv.id }}/pdf">Download PDF</a>
-    </li>
+    Invoice {{ inv.id }} — {{ inv.client_name }} — 
+    Status: <strong>{{ inv.status }}</strong> —
+    <a href="/invoice/{{ inv.id }}/pdf">Download PDF</a>
+</li>
     {% endfor %}
 </ul>
 {% endblock %}

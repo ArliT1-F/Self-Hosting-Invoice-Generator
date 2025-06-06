@@ -2,3 +2,5 @@ Flask
 Flask-SQLAlchemy
 Jinja2
 WeasyPrint
+Flask-Login
+Flask-Mail
