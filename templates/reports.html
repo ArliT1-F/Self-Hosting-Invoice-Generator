@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Monthly Revenue Reports</h2>
+<a href="/">Back to Invoices</a>
+<table border="1" cellpadding="5" cellspacing="0">
+    <thead>
+        <tr>
+            <th>Month</th>
+            <th>Total Revenue</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for month, total in data %}
+        <tr>
+            <td>{{ month }}</td>
+            <td>${{ '%.2f' % total }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
