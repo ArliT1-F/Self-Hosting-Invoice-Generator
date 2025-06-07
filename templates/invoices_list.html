@@ -1,13 +1,30 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block content %}
-<a href="/create">+ Create Invoice</a>
-<ul>
-    {% for inv in invoices %}
-    <li>
-    Invoice {{ inv.id }} — {{ inv.client_name }} — 
-    Status: <strong>{{ inv.status }}</strong> —
-    <a href="/invoice/{{ inv.id }}/pdf">Download PDF</a>
-</li>
-    {% endfor %}
-</ul>
+<h2>Invoices</h2>
+<a href="/create">Create New Invoice</a> | <a href="/reports">Monthly Reports</a> | <a href="/logout">Logout</a>
+<table border="1" cellpadding="5" cellspacing="0">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Client</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for invoice in invoices %}
+        <tr>
+            <td>{{ invoice.id }}</td>
+            <td>{{ invoice.client_name }}</td>
+            <td>{{ invoice.status }}</td>
+            <td>{{ invoice.created_at.strftime('%Y-%m-%d') }}</td>
+            <td>
+                <a href="/invoice/{{ invoice.id }}/pdf">Download PDF</a> |
+                <a href="/invoice/{{ invoice.id }}/email">Send Email</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 {% endblock %}
