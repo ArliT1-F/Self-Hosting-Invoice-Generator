@@ -1,32 +1,49 @@
-<h1>Invoice #{{ invoice.id }}</h1>
-<p><strong>Client:</strong> {{ invoice.client_name }}</p>
-<p><strong>Email:</strong> {{ invoice.client_email }}</p>
-<p><strong>Address:</strong> {{ invoice.client_address }}</p>
-<p><strong>Status:</strong> {{ invoice.status }}</p>
-<p><strong>Date:</strong> {{ invoice.created_at.strftime('%Y-%m-%d') }}</p>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Invoice #{{ invoice.id }}</title>
+    <style>
+        body { font-family: sans-serif; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+        .summary { margin-top: 20px; }
+        .summary p { margin: 4px 0; }
+    </style>
+</head>
+<body>
+    <h1>Invoice #{{ invoice.id }}</h1>
+    <p><strong>Client:</strong> {{ invoice.client_name }}</p>
+    <p><strong>Email:</strong> {{ invoice.client_email }}</p>
+    <p><strong>Address:</strong> {{ invoice.client_address }}</p>
+    <p><strong>Status:</strong> {{ invoice.status }}</p>
+    <p><strong>Date:</strong> {{ invoice.created_at.strftime('%Y-%m-%d') }}</p>
 
-<table border="1" cellspacing="0" cellpadding="5">
-    <thead>
-        <tr>
-            <th>Description</th>
-            <th>Quantity</th>
-            <th>Rate</th>
-            <th>Total</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% set subtotal = 0 %}
-        {% for item in invoice.items %}
-        <tr>
-            <td>{{ item.description }}</td>
-            <td>{{ item.quantity }}</td>
-            <td>${{ '%.2f' % item.rate }}</td>
-            <td>${{ '%.2f' % (item.quantity * item.rate) }}</td>
-            {% set subtotal = subtotal + (item.quantity * item.rate) %}
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-<p><strong>Subtotal:</strong> ${{ '%.2f' % subtotal }}</p>
-<p><strong>Tax ({{ invoice.tax }}%):</strong> ${{ '%.2f' % (subtotal * invoice.tax / 100) }}</p>
-<p><strong>Total:</strong> ${{ '%.2f' % (subtotal + (subtotal * invoice.tax / 100)) }}</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Description</th>
+                <th>Quantity</th>
+                <th>Rate</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in invoice.items %}
+            <tr>
+                <td>{{ item.description }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>${{ '%.2f' % item.rate }}</td>
+                <td>${{ '%.2f' % (item.quantity * item.rate) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="summary">
+        <p><strong>Subtotal:</strong> ${{ '%.2f' % subtotal }}</p>
+        <p><strong>Tax ({{ invoice.tax }}%):</strong> ${{ '%.2f' % tax_amount }}</p>
+        <p><strong>Total:</strong> ${{ '%.2f' % total }}</p>
+    </div>
+</body>
+</html>

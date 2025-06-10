@@ -57,6 +57,7 @@ class Item(db.Model):
 
 # Initialize Database
 with app.app_context():
+    # Ensure schema is up-to-date
     db.create_all()
 
 # --- User Loader ---
@@ -177,5 +178,12 @@ def init_admin():
     db.session.commit()
     return "Admin user created! You can now log in at /login"
 
+@app.route('/reset-db')
+def reset_db():
+    # WARNING: drops all data
+    db.drop_all()
+    db.create_all()
+    return "Database reset complete"
+
 if __name__ == '__main__':
-    app.run(port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=False)
