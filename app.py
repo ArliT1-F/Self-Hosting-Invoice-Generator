@@ -91,7 +91,7 @@ def login():
         user = User.query.filter_by(username=request.form['username']).first()
         if user and user.check_password(request.form['password']):
             login_user(user)
-            return redirect(url_for('index'))
+            return redirect(url_for('landing'))
         return 'Invalid credentials', 401
     return render_template('login.html')
 
@@ -102,10 +102,8 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/')
-@login_required
-def index():
-    invoices = Invoice.query.all()
-    return render_template('invoices_list.html', invoices=invoices)
+def landing():
+    return render_template('landing.html')
 
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
