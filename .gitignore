@@ -1,0 +1,38 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.env/
+.venv/
+venv/
+env/
+
+# IDE settings
+.idea/
+.vscode/
+
+# Logs and coverage
+*.log
+coverage/
+.coverage*
+.pytest_cache/
+
+# Flask & instance data
+instance/
+*.sqlite3
+*.db
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+*.swp
+
+# WeasyPrint cache
+.weasyprint_cache/
