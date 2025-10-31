@@ -1,7 +1,7 @@
 import os
 import io
 from datetime import datetime, date, timedelta
-from flask import Flask, render_template, request, redirect, send_file, url_for, flash
+from flask import Flask, render_template, request, redirect, send_file, url_for, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from flask_mail import Mail, Message
@@ -10,6 +10,7 @@ from weasyprint import HTML
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import NoSuchTableError
 from dateutil.relativedelta import relativedelta
+from werkzeug.utils import secure_filename
 
 # --- App and Config ---
 app = Flask(__name__)
@@ -21,6 +22,8 @@ app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'your-email@gmail.com')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'your-app-password')
+app.config['UPLOAD_FOLDER'] = os.path.join(app.instance_path, 'attachments')
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # --- Extensions ---
 db = SQLAlchemy(app)
@@ -63,6 +66,8 @@ class Invoice(db.Model):
         lazy='dynamic'
     )
     schedules = db.relationship('RecurringSchedule', backref='template_invoice', lazy=True, cascade="all, delete-orphan")
+    payments = db.relationship('Payment', backref='invoice', lazy=True, cascade="all, delete-orphan")
+    attachments = db.relationship('InvoiceAttachment', backref='invoice', lazy=True, cascade="all, delete-orphan")
 
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -70,6 +75,36 @@ class Item(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     rate = db.Column(db.Float, nullable=False)
     invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+
+
+class ProductTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    default_rate = db.Column(db.Float, nullable=False, default=0.0)
+    default_tax_rate = db.Column(db.Float, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Payment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(3), nullable=False, default='USD')
+    provider = db.Column(db.String(50), nullable=False, default='manual')
+    reference = db.Column(db.String(120), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='succeeded')
+    received_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class InvoiceAttachment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    storage_path = db.Column(db.String(500), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class RecurringSchedule(db.Model):
@@ -162,11 +197,33 @@ def calculate_invoice_totals(invoice):
     return subtotal, tax_amount, total
 
 
+def calculate_invoice_balance(invoice: Invoice) -> tuple[float, float]:
+    subtotal, tax_amount, total = calculate_invoice_totals(invoice)
+    paid = sum(payment.amount for payment in invoice.payments if payment.status.lower() == 'succeeded')
+    return total, max(total - paid, 0.0)
+
+
+def update_invoice_payment_status(invoice: Invoice) -> None:
+    total, balance = calculate_invoice_balance(invoice)
+    if balance <= 0 and invoice.status.lower() != 'paid':
+        invoice.status = 'Paid'
+    elif balance > 0 and invoice.status.lower() == 'paid':
+        invoice.status = 'Unpaid'
+
+
+def allowed_attachment(filename: str) -> bool:
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_ATTACHMENT_EXTENSIONS
+
+
 ALLOWED_FREQUENCIES = {'daily', 'weekly', 'monthly', 'yearly'}
 SCHEDULE_PROCESS_INTERVAL_SECONDS = 60
 REMINDER_PROCESS_INTERVAL_SECONDS = 120
 _last_schedule_run = None
 _last_reminder_run = None
+ALLOWED_ATTACHMENT_EXTENSIONS = {
+    'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'zip'
+}
+ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 def parse_date(value, fallback=None):
@@ -432,9 +489,71 @@ def recurring_overview():
     schedules = RecurringSchedule.query.order_by(RecurringSchedule.next_run_at.asc()).all()
     return render_template('recurring_list.html', schedules=schedules)
 
+
+@app.route('/catalog', methods=['GET', 'POST'])
+@login_required
+def catalog():
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        description = (request.form.get('description') or '').strip() or None
+        default_rate_raw = request.form.get('default_rate') or '0'
+        default_tax_raw = request.form.get('default_tax_rate') or None
+
+        if not name:
+            flash('Name is required for catalog items.', 'error')
+            return redirect(url_for('catalog'))
+
+        try:
+            default_rate = float(default_rate_raw)
+        except ValueError:
+            flash('Default rate must be numeric.', 'error')
+            return redirect(url_for('catalog'))
+
+        try:
+            default_tax_rate = float(default_tax_raw) if default_tax_raw else None
+        except ValueError:
+            flash('Default tax must be numeric.', 'error')
+            return redirect(url_for('catalog'))
+
+        template = ProductTemplate(
+            name=name,
+            description=description,
+            default_rate=default_rate,
+            default_tax_rate=default_tax_rate,
+            is_active=True
+        )
+        db.session.add(template)
+        db.session.commit()
+        flash('Catalog item saved.', 'success')
+        return redirect(url_for('catalog'))
+
+    templates = ProductTemplate.query.order_by(ProductTemplate.is_active.desc(), ProductTemplate.name.asc()).all()
+    return render_template('catalog.html', templates=templates)
+
+
+@app.route('/catalog/<int:template_id>/toggle', methods=['POST'])
+@login_required
+def toggle_catalog_template(template_id):
+    template = ProductTemplate.query.get_or_404(template_id)
+    template.is_active = not template.is_active
+    db.session.commit()
+    flash(f"Catalog item '{template.name}' is now {'active' if template.is_active else 'inactive'}.", 'success')
+    return redirect(url_for('catalog'))
+
+
+@app.route('/catalog/<int:template_id>/delete', methods=['POST'])
+@login_required
+def delete_catalog_template(template_id):
+    template = ProductTemplate.query.get_or_404(template_id)
+    db.session.delete(template)
+    db.session.commit()
+    flash('Catalog item deleted.', 'success')
+    return redirect(url_for('catalog'))
+
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_invoice():
+    product_templates = ProductTemplate.query.filter_by(is_active=True).order_by(ProductTemplate.name.asc()).all()
     if request.method == 'POST':
         descs = request.form.getlist('desc')
         qtys = request.form.getlist('qty')
@@ -541,7 +660,7 @@ def create_invoice():
         else:
             flash('Invoice created successfully.', 'success')
         return redirect(url_for('invoices'))
-    return render_template('create_invoice.html')
+    return render_template('create_invoice.html', product_templates=product_templates)
 
 @app.route('/invoice/<int:invoice_id>/pdf')
 @login_required
@@ -569,6 +688,142 @@ def email_invoice(invoice_id):
         app.logger.exception("Failed to send invoice email: %s", exc)
         flash('Failed to send invoice email. Check server logs.', 'error')
     return redirect(url_for('invoices'))
+
+
+@app.route('/invoice/<int:invoice_id>/payment', methods=['GET', 'POST'])
+@login_required
+def record_payment(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    total_due, balance = calculate_invoice_balance(invoice)
+
+    if request.method == 'POST':
+        try:
+            amount = float(request.form.get('amount') or 0)
+        except ValueError:
+            flash('Invalid payment amount.', 'error')
+            return redirect(url_for('record_payment', invoice_id=invoice.id))
+
+        if amount <= 0:
+            flash('Payment amount must be greater than zero.', 'error')
+            return redirect(url_for('record_payment', invoice_id=invoice.id))
+
+        provider = request.form.get('provider', 'manual') or 'manual'
+        reference = request.form.get('reference') or None
+        status = request.form.get('status', 'succeeded') or 'succeeded'
+
+        received_at_raw = request.form.get('received_at')
+        received_at = datetime.utcnow()
+        if received_at_raw:
+            try:
+                received_at = datetime.strptime(received_at_raw, '%Y-%m-%d')
+            except ValueError:
+                flash('Invalid received date format. Use YYYY-MM-DD.', 'error')
+                return redirect(url_for('record_payment', invoice_id=invoice.id))
+
+        payment = Payment(
+            invoice_id=invoice.id,
+            amount=amount,
+            currency=invoice.currency,
+            provider=provider,
+            reference=reference,
+            status=status,
+            received_at=received_at
+        )
+        db.session.add(payment)
+
+        update_invoice_payment_status(invoice)
+        try:
+            db.session.commit()
+            flash('Payment recorded successfully.', 'success')
+        except Exception as exc:  # pragma: no cover
+            db.session.rollback()
+            app.logger.exception("Failed to record payment: %s", exc)
+            flash('Failed to record payment. Please try again.', 'error')
+            return redirect(url_for('record_payment', invoice_id=invoice.id))
+
+        return redirect(url_for('invoices'))
+
+    return render_template(
+        'record_payment.html',
+        invoice=invoice,
+        total_due=total_due,
+        balance=balance,
+    )
+
+@app.route('/invoice/<int:invoice_id>', methods=['GET', 'POST'])
+@login_required
+def invoice_detail(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    total_due, balance = calculate_invoice_balance(invoice)
+
+    if request.method == 'POST':
+        if 'attachment' not in request.files:
+            flash('Select a file to upload.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+        upload = request.files['attachment']
+        if not upload or upload.filename == '':
+            flash('Select a file to upload.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+        filename = secure_filename(upload.filename)
+        if not filename:
+            flash('Invalid file name.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+        if not allowed_attachment(filename):
+            flash('Unsupported file type.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+        if request.content_length and request.content_length > ATTACHMENT_MAX_BYTES:
+            flash('File too large. Limit is 10MB.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+        timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+        stored_filename = f"{invoice.id}_{timestamp}_{filename}"
+        storage_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_filename)
+        upload.save(storage_path)
+
+        attachment = InvoiceAttachment(
+            invoice_id=invoice.id,
+            filename=filename,
+            storage_path=storage_path
+        )
+        db.session.add(attachment)
+        db.session.commit()
+        flash('Attachment uploaded.', 'success')
+        return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+    return render_template(
+        'invoice_detail.html',
+        invoice=invoice,
+        total_due=total_due,
+        balance=balance,
+    )
+
+
+@app.route('/invoice/<int:invoice_id>/attachment/<int:attachment_id>/download')
+@login_required
+def download_attachment(invoice_id, attachment_id):
+    attachment = InvoiceAttachment.query.filter_by(id=attachment_id, invoice_id=invoice_id).first_or_404()
+    if not os.path.exists(attachment.storage_path):
+        flash('Attachment file not found on server.', 'error')
+        return redirect(url_for('invoice_detail', invoice_id=invoice_id))
+    return send_file(attachment.storage_path, as_attachment=True, download_name=attachment.filename)
+
+
+@app.route('/invoice/<int:invoice_id>/attachment/<int:attachment_id>/delete', methods=['POST'])
+@login_required
+def delete_attachment(invoice_id, attachment_id):
+    attachment = InvoiceAttachment.query.filter_by(id=attachment_id, invoice_id=invoice_id).first_or_404()
+    try:
+        if os.path.exists(attachment.storage_path):
+            os.remove(attachment.storage_path)
+    except OSError as exc:  # pragma: no cover - cleanup safety
+        app.logger.warning('Failed to delete attachment file: %s', exc)
+    db.session.delete(attachment)
+    db.session.commit()
+    flash('Attachment removed.', 'success')
+    return redirect(url_for('invoice_detail', invoice_id=invoice_id))
+
 
 @app.route('/reports')
 @login_required

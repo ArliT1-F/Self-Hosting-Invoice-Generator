@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <h2>Invoice #{{ invoice.id }}</h2>
+    <p class="form-help">Created {{ invoice.created_at.strftime('%Y-%m-%d') }} ? Status: {{ invoice.status }} ? Balance: {{ '{:.2f}'.format(balance) }} {{ invoice.currency }}</p>
+
+    <div class="section-block">
+        <h3>Client</h3>
+        <p><strong>{{ invoice.client_name }}</strong><br>{{ invoice.client_email }}<br>{{ invoice.client_address }}</p>
+    </div>
+
+    <div class="section-block">
+        <h3>Attachments</h3>
+        <form method="POST" enctype="multipart/form-data" class="catalog-picker">
+            <input type="file" name="attachment" required>
+            <button type="submit">Upload</button>
+        </form>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th>Uploaded</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if invoice.attachments %}
+                    {% for attachment in invoice.attachments %}
+                    <tr>
+                        <td>{{ attachment.filename }}</td>
+                        <td>{{ attachment.uploaded_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td class="actions">
+                            <a href="{{ url_for('download_attachment', invoice_id=invoice.id, attachment_id=attachment.id) }}">Download</a>
+                            <form class="inline-form" method="POST" action="{{ url_for('delete_attachment', invoice_id=invoice.id, attachment_id=attachment.id) }}" onsubmit="return confirm('Delete this attachment?');">
+                                <button type="submit" class="btn-secondary">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="3" class="table-empty">No attachments uploaded yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="hero-actions">
+        <a class="btn-secondary" href="{{ url_for('invoices') }}">Back to invoices</a>
+        <a class="btn-primary" href="{{ url_for('record_payment', invoice_id=invoice.id) }}">Record payment</a>
+    </div>
+</section>
+{% endblock %}

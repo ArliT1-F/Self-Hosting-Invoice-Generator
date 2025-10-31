@@ -403,6 +403,25 @@ button[type="button"] {
     margin-top: 1.5rem;
 }
 
+.catalog-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.catalog-picker select {
+    min-width: 240px;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.catalog-picker .btn-secondary {
+    text-decoration: none;
+}
+
 .flash-stack {
     display: grid;
     gap: 0.75rem;
@@ -553,6 +572,14 @@ button[type="button"] {
     width: 18px;
     height: 18px;
     accent-color: var(--primary);
+}
+
+.inline-form {
+    display: inline;
+}
+
+.inline-form button {
+    margin-left: 0.5rem;
 }
 
 .btn-primary,

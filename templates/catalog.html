@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <h2>Product catalog</h2>
+    <p class="form-help">Store reusable products and services so you can add them to invoices with two clicks.</p>
+
+    <form method="POST" class="form-grid section-block">
+        <label>
+            <span>Name</span>
+            <input type="text" name="name" placeholder="Service bundle" required>
+        </label>
+        <label>
+            <span>Default rate</span>
+            <input type="number" name="default_rate" step="0.01" min="0" placeholder="150.00" required>
+        </label>
+        <label>
+            <span>Default tax (%)</span>
+            <input type="number" name="default_tax_rate" step="0.01" min="0" placeholder="optional">
+        </label>
+        <label class="grid-span-2">
+            <span>Description</span>
+            <textarea name="description" placeholder="Internal notes or what will appear on the invoice."></textarea>
+        </label>
+        <div class="hero-actions">
+            <button type="submit">Save item</button>
+            <a class="btn-secondary" href="{{ url_for('create_invoice') }}">Create invoice</a>
+        </div>
+    </form>
+
+    <div class="section-block">
+        <h3>Saved items</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Rate</th>
+                    <th>Default tax</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if templates %}
+                    {% for template in templates %}
+                    <tr>
+                        <td>
+                            <strong>{{ template.name }}</strong>
+                            {% if template.description %}
+                            <div class="form-help">{{ template.description }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ '{:.2f}'.format(template.default_rate) }}</td>
+                        <td>{{ '{:.2f}'.format(template.default_tax_rate) if template.default_tax_rate is not none else '?' }}</td>
+                        <td>
+                            <span class="badge {{ 'status-paid' if template.is_active else 'status-unpaid' }}">
+                                {{ 'Active' if template.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td>
+                            <form method="POST" action="{{ url_for('toggle_catalog_template', template_id=template.id) }}" class="inline-form">
+                                <button type="submit" class="btn-secondary">{{ 'Deactivate' if template.is_active else 'Activate' }}</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_catalog_template', template_id=template.id) }}" class="inline-form" onsubmit="return confirm('Delete this item?');">
+                                <button type="submit" class="btn-secondary">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" class="table-empty">No catalog entries yet. Add your first product or service above.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

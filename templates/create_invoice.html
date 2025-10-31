@@ -47,12 +47,29 @@
             <select name="locale">
                 <option value="en-US" selected>English (US)</option>
                 <option value="en-GB">English (UK)</option>
-                <option value="fr-FR">Fran?ais (FR)</option>
-                <option value="de-DE">Deutsch</option>
-                <option value="es-ES">Espa?ol</option>
+                <option value="fr-FR">French (FR)</option>
+                <option value="de-DE">German (DE)</option>
+                <option value="es-ES">Spanish (ES)</option>
             </select>
         </label>
     </div>
+
+    {% if product_templates %}
+    <div class="form-divider">Saved items</div>
+    <div class="catalog-picker">
+        <select id="product-template-select" onchange="addItemFromTemplate(this)">
+            <option value="">Insert an item from catalog...</option>
+            {% for template in product_templates %}
+            <option value="{{ template.id }}" data-description="{{ template.description or template.name }}" data-rate="{{ '%.2f' % template.default_rate }}" data-tax="{{ template.default_tax_rate if template.default_tax_rate is not none else '' }}">
+                {{ template.name }}
+            </option>
+            {% endfor %}
+        </select>
+        <a class="btn-secondary" href="{{ url_for('catalog') }}">Manage catalog</a>
+    </div>
+    {% else %}
+    <p class="form-help">Save recurring line items in the <a href="{{ url_for('catalog') }}">catalog</a> to add them instantly to new invoices.</p>
+    {% endif %}
 
     <div class="form-divider">Line items</div>
     <div id="items">
@@ -105,13 +122,51 @@
 </form>
 
 <script>
-function addItem() {
+function addItem(defaults = {}) {
     const item = document.createElement('div');
     item.classList.add('item');
-    item.innerHTML = '<input name="desc" placeholder="Description" required>' +
-                     '<input name="qty" type="number" min="1" placeholder="Qty" required>' +
-                     '<input name="rate" type="number" step="0.01" placeholder="Rate" required>';
+
+    const descInput = document.createElement('input');
+    descInput.name = 'desc';
+    descInput.placeholder = 'Description';
+    descInput.required = true;
+    descInput.value = defaults.description || '';
+
+    const qtyInput = document.createElement('input');
+    qtyInput.name = 'qty';
+    qtyInput.type = 'number';
+    qtyInput.min = '1';
+    qtyInput.placeholder = 'Qty';
+    qtyInput.required = true;
+    qtyInput.value = defaults.quantity || defaults.qty || 1;
+
+    const rateInput = document.createElement('input');
+    rateInput.name = 'rate';
+    rateInput.type = 'number';
+    rateInput.step = '0.01';
+    rateInput.placeholder = 'Rate';
+    rateInput.required = true;
+    rateInput.value = defaults.rate !== undefined && defaults.rate !== null ? defaults.rate : '';
+
+    item.appendChild(descInput);
+    item.appendChild(qtyInput);
+    item.appendChild(rateInput);
+
     document.getElementById('items').appendChild(item);
+}
+
+function addItemFromTemplate(select) {
+    const selected = select.options[select.selectedIndex];
+    if (!selected || !selected.value) {
+        return;
+    }
+    const defaults = {
+        description: selected.dataset.description || selected.textContent.trim(),
+        rate: selected.dataset.rate || '',
+        quantity: 1
+    };
+    addItem(defaults);
+    select.selectedIndex = 0;
 }
 </script>
 {% endblock %}
