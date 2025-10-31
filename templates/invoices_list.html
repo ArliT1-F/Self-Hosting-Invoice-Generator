@@ -1,8 +1,17 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Invoices</h2>
-<a href="/create">Create New Invoice</a> | <a href="/reports">Monthly Reports</a> | <a href="/logout">Logout</a>
-<table border="1" cellpadding="5" cellspacing="0">
+<section class="card page-header">
+    <div>
+        <h2>Invoices</h2>
+        <p>Review, download, and send invoices to your clients without leaving the dashboard.</p>
+    </div>
+    <div class="header-actions">
+        <a class="btn-secondary" href="{{ url_for('reports') }}">View reports</a>
+        <a class="btn-primary" href="{{ url_for('create_invoice') }}">New invoice</a>
+    </div>
+</section>
+
+<table>
     <thead>
         <tr>
             <th>ID</th>
@@ -13,18 +22,26 @@
         </tr>
     </thead>
     <tbody>
-        {% for invoice in invoices %}
-        <tr>
-            <td>{{ invoice.id }}</td>
-            <td>{{ invoice.client_name }}</td>
-            <td>{{ invoice.status }}</td>
-            <td>{{ invoice.created_at.strftime('%Y-%m-%d') }}</td>
-            <td>
-                <a href="/invoice/{{ invoice.id }}/pdf">Download PDF</a> |
-                <a href="/invoice/{{ invoice.id }}/email">Send Email</a>
-            </td>
-        </tr>
-        {% endfor %}
+        {% if invoices %}
+            {% for invoice in invoices %}
+            <tr>
+                <td>{{ invoice.id }}</td>
+                <td>{{ invoice.client_name }}</td>
+                <td>
+                    <span class="badge {{ 'status-paid' if invoice.status|lower == 'paid' else 'status-unpaid' }}">{{ invoice.status }}</span>
+                </td>
+                <td>{{ invoice.created_at.strftime('%Y-%m-%d') }}</td>
+                <td class="actions">
+                    <a href="{{ url_for('download_pdf', invoice_id=invoice.id) }}">Download PDF</a>
+                    <a href="{{ url_for('email_invoice', invoice_id=invoice.id) }}">Send Email</a>
+                </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td class="table-empty" colspan="5">No invoices yet. Create your first invoice to see it listed here.</td>
+            </tr>
+        {% endif %}
     </tbody>
 </table>
 {% endblock %}

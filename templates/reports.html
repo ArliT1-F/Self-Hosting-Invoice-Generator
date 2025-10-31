@@ -1,8 +1,16 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Monthly Revenue Reports</h2>
-<a href="/">Back to Invoices</a>
-<table border="1" cellpadding="5" cellspacing="0">
+<section class="card page-header">
+    <div>
+        <h2>Revenue trends</h2>
+        <p>Track monthly totals to understand cash flow and repeat business at a glance.</p>
+    </div>
+    <div class="header-actions">
+        <a class="btn-secondary" href="{{ url_for('invoices') }}">Back to invoices</a>
+    </div>
+</section>
+
+<table>
     <thead>
         <tr>
             <th>Month</th>
@@ -10,12 +18,18 @@
         </tr>
     </thead>
     <tbody>
-        {% for month, total in data %}
-        <tr>
-            <td>{{ month }}</td>
-            <td>${{ '%.2f' % total }}</td>
-        </tr>
-        {% endfor %}
+        {% if data %}
+            {% for month, total in data %}
+            <tr>
+                <td>{{ month }}</td>
+                <td>${{ '%.2f' % total }}</td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td class="table-empty" colspan="2">No invoice activity yet. Finish an invoice to see revenue insights.</td>
+            </tr>
+        {% endif %}
     </tbody>
 </table>
 {% endblock %}

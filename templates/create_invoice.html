@@ -1,33 +1,54 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Create Invoice</h2>
+<h2>Create an invoice</h2>
+<p class="form-help">Populate the client details and add line items. You can always add more rows before saving.</p>
 <form method="POST">
-    <input name="client_name" placeholder="Client Name" required><br>
-    <input name="client_email" placeholder="Client Email" required><br>
-    <textarea name="client_address" placeholder="Client Address" required></textarea><br>
-    <input name="tax" type="number" step="0.01" placeholder="Tax %" required><br>
-    <select name="status">
-        <option value="Unpaid">Unpaid</option>
-        <option value="Paid">Paid</option>
-    </select>
-    <hr>
+    <div class="form-grid">
+        <label>
+            <span>Client name</span>
+            <input name="client_name" placeholder="Acme Corp" required>
+        </label>
+        <label>
+            <span>Client email</span>
+            <input name="client_email" type="email" placeholder="billing@acme.com" required>
+        </label>
+        <label class="grid-span-2">
+            <span>Client address</span>
+            <textarea name="client_address" placeholder="123 Market Street&#10;San Francisco, CA" required></textarea>
+        </label>
+        <label>
+            <span>Tax rate (%)</span>
+            <input name="tax" type="number" step="0.01" placeholder="8.5" required>
+        </label>
+        <label>
+            <span>Status</span>
+            <select name="status">
+                <option value="Unpaid">Unpaid</option>
+                <option value="Paid">Paid</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="form-divider">Line items</div>
     <div id="items">
         <div class="item">
-            <input name="desc" placeholder="Description" required>
-            <input name="qty" type="number" placeholder="Quantity" required>
+            <input name="desc" placeholder="Consulting services" required>
+            <input name="qty" type="number" min="1" placeholder="Qty" required>
             <input name="rate" type="number" step="0.01" placeholder="Rate" required>
         </div>
     </div>
-    <button type="button" onclick="addItem()">Add Item</button><br><br>
-    <button type="submit">Create Invoice</button>
+    <div class="hero-actions">
+        <button type="button" onclick="addItem()">Add another item</button>
+        <button type="submit">Create invoice</button>
+    </div>
 </form>
 
 <script>
 function addItem() {
     const item = document.createElement('div');
     item.classList.add('item');
-    item.innerHTML = '<input name="desc" placeholder="Description" required> ' +
-                     '<input name="qty" type="number" placeholder="Quantity" required> ' +
+    item.innerHTML = '<input name="desc" placeholder="Description" required>' +
+                     '<input name="qty" type="number" min="1" placeholder="Qty" required>' +
                      '<input name="rate" type="number" step="0.01" placeholder="Rate" required>';
     document.getElementById('items').appendChild(item);
 }
