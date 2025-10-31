@@ -32,6 +32,8 @@
             <nav class="navbar">
                 <div class="nav-links">
                     <a href="{{ url_for('landing') }}">Home</a>
+                    <a href="{{ url_for('landing') }}#features">Features</a>
+                    <a href="{{ url_for('landing') }}#help">Help</a>
                     {% if current_user.is_authenticated %}
                         <a href="{{ url_for('invoices') }}">Invoices</a>
                         <a href="{{ url_for('create_invoice') }}">Create Invoice</a>
@@ -43,7 +45,7 @@
                     {% endif %}
                 </div>
                 <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Activate dark mode">
-                    <span class="theme-toggle__icon" aria-hidden="true">🌙</span>
+                    <span class="theme-toggle__icon" aria-hidden="true">??</span>
                     <span class="theme-toggle__label">Dark mode</span>
                 </button>
             </nav>
