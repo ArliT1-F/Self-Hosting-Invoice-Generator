@@ -1,4 +1,10 @@
 *.pyc
-database.db
+instance/*.db
 __pycache__/
 .vscode
+*.py[cod]
+*$py.class
+
+build/
+dist/
+*.egg-info/
