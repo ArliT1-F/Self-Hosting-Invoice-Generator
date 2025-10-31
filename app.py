@@ -1,7 +1,7 @@
 import os
 import io
 from datetime import datetime, date, timedelta
-from flask import Flask, render_template, request, redirect, send_file, url_for, flash
+from flask import Flask, render_template, request, redirect, send_file, url_for, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from flask_mail import Mail, Message
@@ -10,6 +10,7 @@ from weasyprint import HTML
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import NoSuchTableError
 from dateutil.relativedelta import relativedelta
+from werkzeug.utils import secure_filename
 
 # --- App and Config ---
 app = Flask(__name__)
@@ -21,6 +22,8 @@ app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'your-email@gmail.com')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'your-app-password')
+app.config['UPLOAD_FOLDER'] = os.path.join(app.instance_path, 'attachments')
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # --- Extensions ---
 db = SQLAlchemy(app)
@@ -64,6 +67,7 @@ class Invoice(db.Model):
     )
     schedules = db.relationship('RecurringSchedule', backref='template_invoice', lazy=True, cascade="all, delete-orphan")
     payments = db.relationship('Payment', backref='invoice', lazy=True, cascade="all, delete-orphan")
+    attachments = db.relationship('InvoiceAttachment', backref='invoice', lazy=True, cascade="all, delete-orphan")
 
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -93,6 +97,14 @@ class Payment(db.Model):
     status = db.Column(db.String(20), nullable=False, default='succeeded')
     received_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class InvoiceAttachment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    storage_path = db.Column(db.String(500), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class RecurringSchedule(db.Model):
@@ -199,11 +211,19 @@ def update_invoice_payment_status(invoice: Invoice) -> None:
         invoice.status = 'Unpaid'
 
 
+def allowed_attachment(filename: str) -> bool:
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_ATTACHMENT_EXTENSIONS
+
+
 ALLOWED_FREQUENCIES = {'daily', 'weekly', 'monthly', 'yearly'}
 SCHEDULE_PROCESS_INTERVAL_SECONDS = 60
 REMINDER_PROCESS_INTERVAL_SECONDS = 120
 _last_schedule_run = None
 _last_reminder_run = None
+ALLOWED_ATTACHMENT_EXTENSIONS = {
+    'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'zip'
+}
+ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 def parse_date(value, fallback=None):
@@ -729,6 +749,81 @@ def record_payment(invoice_id):
         total_due=total_due,
         balance=balance,
     )
+
+@app.route('/invoice/<int:invoice_id>', methods=['GET', 'POST'])
+@login_required
+def invoice_detail(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    total_due, balance = calculate_invoice_balance(invoice)
+
+    if request.method == 'POST':
+        if 'attachment' not in request.files:
+            flash('Select a file to upload.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+        upload = request.files['attachment']
+        if not upload or upload.filename == '':
+            flash('Select a file to upload.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+        filename = secure_filename(upload.filename)
+        if not filename:
+            flash('Invalid file name.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+        if not allowed_attachment(filename):
+            flash('Unsupported file type.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+        if request.content_length and request.content_length > ATTACHMENT_MAX_BYTES:
+            flash('File too large. Limit is 10MB.', 'error')
+            return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+        timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+        stored_filename = f"{invoice.id}_{timestamp}_{filename}"
+        storage_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_filename)
+        upload.save(storage_path)
+
+        attachment = InvoiceAttachment(
+            invoice_id=invoice.id,
+            filename=filename,
+            storage_path=storage_path
+        )
+        db.session.add(attachment)
+        db.session.commit()
+        flash('Attachment uploaded.', 'success')
+        return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+    return render_template(
+        'invoice_detail.html',
+        invoice=invoice,
+        total_due=total_due,
+        balance=balance,
+    )
+
+
+@app.route('/invoice/<int:invoice_id>/attachment/<int:attachment_id>/download')
+@login_required
+def download_attachment(invoice_id, attachment_id):
+    attachment = InvoiceAttachment.query.filter_by(id=attachment_id, invoice_id=invoice_id).first_or_404()
+    if not os.path.exists(attachment.storage_path):
+        flash('Attachment file not found on server.', 'error')
+        return redirect(url_for('invoice_detail', invoice_id=invoice_id))
+    return send_file(attachment.storage_path, as_attachment=True, download_name=attachment.filename)
+
+
+@app.route('/invoice/<int:invoice_id>/attachment/<int:attachment_id>/delete', methods=['POST'])
+@login_required
+def delete_attachment(invoice_id, attachment_id):
+    attachment = InvoiceAttachment.query.filter_by(id=attachment_id, invoice_id=invoice_id).first_or_404()
+    try:
+        if os.path.exists(attachment.storage_path):
+            os.remove(attachment.storage_path)
+    except OSError as exc:  # pragma: no cover - cleanup safety
+        app.logger.warning('Failed to delete attachment file: %s', exc)
+    db.session.delete(attachment)
+    db.session.commit()
+    flash('Attachment removed.', 'success')
+    return redirect(url_for('invoice_detail', invoice_id=invoice_id))
+
 
 @app.route('/reports')
 @login_required
