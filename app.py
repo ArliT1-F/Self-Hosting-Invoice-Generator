@@ -76,6 +76,14 @@ def calculate_invoice_totals(invoice):
     total = subtotal + tax_amount
     return subtotal, tax_amount, total
 
+# --- Template Helpers ---
+@app.context_processor
+def inject_utilities():
+    return {
+        'datetime': datetime,
+    }
+
+
 # --- Routes ---
 @app.route('/register', methods=['GET', 'POST'])
 def register():
