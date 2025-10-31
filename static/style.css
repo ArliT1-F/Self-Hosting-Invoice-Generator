@@ -403,6 +403,35 @@ button[type="button"] {
     margin-top: 1.5rem;
 }
 
+.flash-stack {
+    display: grid;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.flash {
+    border-radius: 12px;
+    padding: 0.95rem 1.1rem;
+    border: 1px solid var(--outline);
+    background: var(--surface-strong);
+    color: var(--text);
+    box-shadow: 0 20px 35px -30px rgba(15, 23, 42, 0.55);
+}
+
+.flash-success {
+    border-color: rgba(16, 185, 129, 0.6);
+    background: rgba(16, 185, 129, 0.12);
+}
+
+.flash-error {
+    border-color: rgba(239, 68, 68, 0.65);
+    background: rgba(239, 68, 68, 0.14);
+}
+
+.flash-error {
+    color: #991b1b;
+}
+
 .section-block {
     margin-top: 2.5rem;
 }
@@ -511,6 +540,19 @@ button[type="button"] {
 .help-step-content p {
     margin: 0;
     color: var(--muted);
+}
+
+.checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+}
+
+.checkbox-field input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
 }
 
 .btn-primary,

@@ -27,6 +27,31 @@
                 <option value="Paid">Paid</option>
             </select>
         </label>
+        <label>
+            <span>Due date</span>
+            <input type="date" name="due_date">
+            <span class="form-help">If empty we use 14 days from today.</span>
+        </label>
+        <label>
+            <span>Currency</span>
+            <select name="currency">
+                <option value="USD" selected>USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="AUD">AUD</option>
+                <option value="CAD">CAD</option>
+            </select>
+        </label>
+        <label>
+            <span>Locale</span>
+            <select name="locale">
+                <option value="en-US" selected>English (US)</option>
+                <option value="en-GB">English (UK)</option>
+                <option value="fr-FR">Fran?ais (FR)</option>
+                <option value="de-DE">Deutsch</option>
+                <option value="es-ES">Espa?ol</option>
+            </select>
+        </label>
     </div>
 
     <div class="form-divider">Line items</div>
@@ -37,6 +62,42 @@
             <input name="rate" type="number" step="0.01" placeholder="Rate" required>
         </div>
     </div>
+
+    <div class="form-divider">Recurring schedule (optional)</div>
+    <div class="form-grid">
+        <label>
+            <span>Frequency</span>
+            <select name="recurring_frequency">
+                <option value="none" selected>Do not repeat</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+                <option value="daily">Daily</option>
+            </select>
+        </label>
+        <label>
+            <span>Interval</span>
+            <input name="recurring_interval" type="number" min="1" value="1">
+        </label>
+        <label>
+            <span>Start date</span>
+            <input type="date" name="recurring_start_date">
+        </label>
+        <label>
+            <span>Due after (days)</span>
+            <input name="recurring_due_after" type="number" min="1" value="14">
+        </label>
+        <label class="checkbox-field">
+            <input type="checkbox" name="recurring_auto_send" value="1">
+            <span>Automatically email generated invoices</span>
+        </label>
+        <label class="grid-span-2">
+            <span>Reminder offsets</span>
+            <input name="recurring_reminders" placeholder="e.g. -3,0,3">
+            <span class="form-help">Comma-separated days relative to due date (negative = before).</span>
+        </label>
+    </div>
+
     <div class="hero-actions">
         <button type="button" onclick="addItem()">Add another item</button>
         <button type="submit">Create invoice</button>
