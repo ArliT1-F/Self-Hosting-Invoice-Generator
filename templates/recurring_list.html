@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card page-header">
+    <div>
+        <h2>Recurring schedules</h2>
+        <p>Automatically regenerate invoices on a cadence and keep customers reminded ahead of due dates.</p>
+    </div>
+    <div class="header-actions">
+        <a class="btn-secondary" href="{{ url_for('create_invoice') }}">New invoice</a>
+        <a class="btn-primary" href="{{ url_for('invoices') }}">View invoices</a>
+    </div>
+</section>
+
+<table>
+    <thead>
+        <tr>
+            <th>Template</th>
+            <th>Frequency</th>
+            <th>Next run</th>
+            <th>Auto send</th>
+            <th>Due after</th>
+            <th>Reminders</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if schedules %}
+            {% for schedule in schedules %}
+            <tr>
+                <td>
+                    {% if schedule.template_invoice %}
+                        <strong>#{{ schedule.template_invoice.id }}</strong> ? {{ schedule.template_invoice.client_name }}
+                    {% else %}
+                        <em>Missing template</em>
+                    {% endif %}
+                </td>
+                <td>{{ schedule.frequency|capitalize }} ?{{ schedule.interval }}</td>
+                <td>{{ schedule.next_run_at.strftime('%Y-%m-%d %H:%M') if schedule.next_run_at else '?' }}</td>
+                <td>{{ 'Yes' if schedule.auto_send else 'No' }}</td>
+                <td>{{ schedule.due_after_days }} days</td>
+                <td>
+                    {% if schedule.reminders %}
+                        {% for reminder in schedule.reminders %}
+                            <span class="badge">{{ reminder.offset_days }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="form-help">None</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge {% if schedule.status == 'active' %}status-paid{% else %}status-unpaid{% endif %}">{{ schedule.status|capitalize }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td class="table-empty" colspan="7">No recurring schedules yet. Enable automatic billing when creating an invoice.</td>
+            </tr>
+        {% endif %}
+    </tbody>
+</table>
+{% endblock %}

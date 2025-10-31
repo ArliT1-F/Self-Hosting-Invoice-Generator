@@ -18,6 +18,7 @@
             <th>Client</th>
             <th>Status</th>
             <th>Date</th>
+            <th>Due</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -31,6 +32,7 @@
                     <span class="badge {{ 'status-paid' if invoice.status|lower == 'paid' else 'status-unpaid' }}">{{ invoice.status }}</span>
                 </td>
                 <td>{{ invoice.created_at.strftime('%Y-%m-%d') }}</td>
+                <td>{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '?' }}</td>
                 <td class="actions">
                     <a href="{{ url_for('download_pdf', invoice_id=invoice.id) }}">Download PDF</a>
                     <a href="{{ url_for('email_invoice', invoice_id=invoice.id) }}">Send Email</a>
