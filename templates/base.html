@@ -10,9 +10,14 @@
 <body>
     <nav class="navbar">
         <a href="{{ url_for('landing') }}">🏠 Home</a>
-        <a href="{{ url_for('login') }}">🔐 Login</a>
-        <a href="{{ url_for('invoices') }}">📂 Invoices</a>
-        <a href="{{ url_for('create_invoice') }}">🧾 Create Invoice</a>
+        {% if current_user.is_authenticated %}
+            <a href="{{ url_for('invoices') }}">📂 Invoices</a>
+            <a href="{{ url_for('create_invoice') }}">🧾 Create Invoice</a>
+            <a href="{{ url_for('logout') }}">🚪 Logout</a>
+        {% else %}
+            <a href="{{ url_for('login') }}">🔐 Login</a>
+            <a href="{{ url_for('register') }}">🆕 Register</a>
+        {% endif %}
     </nav>
 
     <main class="content">
