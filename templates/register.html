@@ -1,11 +1,21 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Register</h2>
+<h2>Create your account</h2>
+<p class="form-help">Set up a secure profile to build invoices, track revenue, and email clients instantly.</p>
 <form method="POST">
-    <input type="text" name="username" placeholder="Username" required><br>
-    <input type="email" name="email" placeholder="Email" required><br>
-    <input type="password" name="password" placeholder="Password" required><br>
+    <label>
+        <span>Username</span>
+        <input type="text" name="username" placeholder="yourname" required>
+    </label>
+    <label>
+        <span>Email</span>
+        <input type="email" name="email" placeholder="you@example.com" required>
+    </label>
+    <label>
+        <span>Password</span>
+        <input type="password" name="password" placeholder="Create a password" required>
+    </label>
     <button type="submit">Register</button>
 </form>
-<p>Already have an account? <a href="/login">Login</a></p>
+<p class="form-help">Already have an account? <a href="{{ url_for('login') }}">Sign in instead.</a></p>
 {% endblock %}

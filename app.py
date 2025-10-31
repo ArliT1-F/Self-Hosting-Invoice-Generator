@@ -69,6 +69,21 @@ def load_user(user_id):
 def generate_pdf(html_content):
     return HTML(string=html_content).write_pdf()
 
+
+def calculate_invoice_totals(invoice):
+    subtotal = sum(item.quantity * item.rate for item in invoice.items)
+    tax_amount = subtotal * (invoice.tax / 100)
+    total = subtotal + tax_amount
+    return subtotal, tax_amount, total
+
+# --- Template Helpers ---
+@app.context_processor
+def inject_utilities():
+    return {
+        'datetime': datetime,
+    }
+
+
 # --- Routes ---
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -105,6 +120,13 @@ def logout():
 def landing():
     return render_template('landing.html')
 
+
+@app.route('/invoices')
+@login_required
+def invoices():
+    all_invoices = Invoice.query.order_by(Invoice.created_at.desc()).all()
+    return render_template('invoices_list.html', invoices=all_invoices)
+
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_invoice():
@@ -129,14 +151,21 @@ def create_invoice():
             item = Item(description=desc, quantity=int(qty), rate=float(rate), invoice_id=invoice.id)
             db.session.add(item)
         db.session.commit()
-        return redirect(url_for('index'))
+        return redirect(url_for('invoices'))
     return render_template('create_invoice.html')
 
 @app.route('/invoice/<int:invoice_id>/pdf')
 @login_required
 def download_pdf(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
-    html = render_template('invoice_pdf.html', invoice=invoice)
+    subtotal, tax_amount, total = calculate_invoice_totals(invoice)
+    html = render_template(
+        'invoice_pdf.html',
+        invoice=invoice,
+        subtotal=subtotal,
+        tax_amount=tax_amount,
+        total=total,
+    )
     pdf = generate_pdf(html)
     return send_file(io.BytesIO(pdf), download_name=f'invoice_{invoice.id}.pdf', as_attachment=True)
 
@@ -144,7 +173,14 @@ def download_pdf(invoice_id):
 @login_required
 def email_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
-    html = render_template('invoice_pdf.html', invoice=invoice)
+    subtotal, tax_amount, total = calculate_invoice_totals(invoice)
+    html = render_template(
+        'invoice_pdf.html',
+        invoice=invoice,
+        subtotal=subtotal,
+        tax_amount=tax_amount,
+        total=total,
+    )
     pdf = generate_pdf(html)
 
     msg = Message(
@@ -155,7 +191,7 @@ def email_invoice(invoice_id):
     msg.body = f"Dear {invoice.client_name},\nPlease find attached your invoice."
     msg.attach(f"invoice_{invoice.id}.pdf", "application/pdf", pdf)
     mail.send(msg)
-    return redirect(url_for('index'))
+    return redirect(url_for('invoices'))
 
 @app.route('/reports')
 @login_required

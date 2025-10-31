@@ -1,9 +1,17 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Login</h2>
+<h2>Welcome back</h2>
+<p class="form-help">Access your dashboard with the credentials you set during registration.</p>
 <form method="POST">
-    <input type="text" name="username" placeholder="Username" required><br>
-    <input type="password" name="password" placeholder="Password" required><br>
+    <label>
+        <span>Username</span>
+        <input type="text" name="username" placeholder="yourname" required>
+    </label>
+    <label>
+        <span>Password</span>
+        <input type="password" name="password" placeholder="????????" required>
+    </label>
     <button type="submit">Login</button>
 </form>
+<p class="form-help">Need an account? <a href="{{ url_for('register') }}">Create one in seconds.</a></p>
 {% endblock %}
