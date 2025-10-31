@@ -73,6 +73,16 @@ class Item(db.Model):
     invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
 
 
+class ProductTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    default_rate = db.Column(db.Float, nullable=False, default=0.0)
+    default_tax_rate = db.Column(db.Float, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
@@ -459,9 +469,71 @@ def recurring_overview():
     schedules = RecurringSchedule.query.order_by(RecurringSchedule.next_run_at.asc()).all()
     return render_template('recurring_list.html', schedules=schedules)
 
+
+@app.route('/catalog', methods=['GET', 'POST'])
+@login_required
+def catalog():
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        description = (request.form.get('description') or '').strip() or None
+        default_rate_raw = request.form.get('default_rate') or '0'
+        default_tax_raw = request.form.get('default_tax_rate') or None
+
+        if not name:
+            flash('Name is required for catalog items.', 'error')
+            return redirect(url_for('catalog'))
+
+        try:
+            default_rate = float(default_rate_raw)
+        except ValueError:
+            flash('Default rate must be numeric.', 'error')
+            return redirect(url_for('catalog'))
+
+        try:
+            default_tax_rate = float(default_tax_raw) if default_tax_raw else None
+        except ValueError:
+            flash('Default tax must be numeric.', 'error')
+            return redirect(url_for('catalog'))
+
+        template = ProductTemplate(
+            name=name,
+            description=description,
+            default_rate=default_rate,
+            default_tax_rate=default_tax_rate,
+            is_active=True
+        )
+        db.session.add(template)
+        db.session.commit()
+        flash('Catalog item saved.', 'success')
+        return redirect(url_for('catalog'))
+
+    templates = ProductTemplate.query.order_by(ProductTemplate.is_active.desc(), ProductTemplate.name.asc()).all()
+    return render_template('catalog.html', templates=templates)
+
+
+@app.route('/catalog/<int:template_id>/toggle', methods=['POST'])
+@login_required
+def toggle_catalog_template(template_id):
+    template = ProductTemplate.query.get_or_404(template_id)
+    template.is_active = not template.is_active
+    db.session.commit()
+    flash(f"Catalog item '{template.name}' is now {'active' if template.is_active else 'inactive'}.", 'success')
+    return redirect(url_for('catalog'))
+
+
+@app.route('/catalog/<int:template_id>/delete', methods=['POST'])
+@login_required
+def delete_catalog_template(template_id):
+    template = ProductTemplate.query.get_or_404(template_id)
+    db.session.delete(template)
+    db.session.commit()
+    flash('Catalog item deleted.', 'success')
+    return redirect(url_for('catalog'))
+
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_invoice():
+    product_templates = ProductTemplate.query.filter_by(is_active=True).order_by(ProductTemplate.name.asc()).all()
     if request.method == 'POST':
         descs = request.form.getlist('desc')
         qtys = request.form.getlist('qty')
@@ -568,7 +640,7 @@ def create_invoice():
         else:
             flash('Invoice created successfully.', 'success')
         return redirect(url_for('invoices'))
-    return render_template('create_invoice.html')
+    return render_template('create_invoice.html', product_templates=product_templates)
 
 @app.route('/invoice/<int:invoice_id>/pdf')
 @login_required
