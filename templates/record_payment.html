@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <h2>Record payment for invoice #{{ invoice.id }}</h2>
+    <p class="form-help">Outstanding balance: {{ '{:.2f}'.format(balance) }} {{ invoice.currency }} (total {{ '{:.2f}'.format(total_due) }}).</p>
+    <form method="POST">
+        <div class="form-grid">
+            <label>
+                <span>Amount received</span>
+                <input type="number" name="amount" step="0.01" min="0.01" value="{{ '{:.2f}'.format(balance if balance > 0 else total_due) }}" required>
+            </label>
+            <label>
+                <span>Date received</span>
+                <input type="date" name="received_at" value="{{ datetime.utcnow().strftime('%Y-%m-%d') }}">
+            </label>
+            <label>
+                <span>Payment method</span>
+                <select name="provider">
+                    <option value="manual">Manual (cash/transfer)</option>
+                    <option value="stripe">Stripe (placeholder)</option>
+                    <option value="paypal">PayPal (placeholder)</option>
+                </select>
+            </label>
+            <label>
+                <span>Status</span>
+                <select name="status">
+                    <option value="succeeded" selected>Success</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
+                </select>
+            </label>
+            <label class="grid-span-2">
+                <span>Reference</span>
+                <input type="text" name="reference" placeholder="Transaction reference (optional)">
+            </label>
+        </div>
+
+        <div class="hero-actions">
+            <a class="btn-secondary" href="{{ url_for('invoices') }}">Back</a>
+            <button type="submit">Save payment</button>
+        </div>
+    </form>
+
+    {% if invoice.payments %}
+    <div class="section-block">
+        <h3>Payment history</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Status</th>
+                    <th>Reference</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payment in invoice.payments %}
+                <tr>
+                    <td>{{ payment.received_at.strftime('%Y-%m-%d') if payment.received_at else payment.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td>{{ '{:.2f}'.format(payment.amount) }} {{ payment.currency }}</td>
+                    <td>{{ payment.provider|capitalize }}</td>
+                    <td>{{ payment.status|capitalize }}</td>
+                    <td>{{ payment.reference or '?' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

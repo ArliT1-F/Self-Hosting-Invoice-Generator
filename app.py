@@ -63,6 +63,7 @@ class Invoice(db.Model):
         lazy='dynamic'
     )
     schedules = db.relationship('RecurringSchedule', backref='template_invoice', lazy=True, cascade="all, delete-orphan")
+    payments = db.relationship('Payment', backref='invoice', lazy=True, cascade="all, delete-orphan")
 
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -70,6 +71,18 @@ class Item(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     rate = db.Column(db.Float, nullable=False)
     invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+
+
+class Payment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(3), nullable=False, default='USD')
+    provider = db.Column(db.String(50), nullable=False, default='manual')
+    reference = db.Column(db.String(120), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='succeeded')
+    received_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class RecurringSchedule(db.Model):
@@ -160,6 +173,20 @@ def calculate_invoice_totals(invoice):
     tax_amount = subtotal * (invoice.tax / 100)
     total = subtotal + tax_amount
     return subtotal, tax_amount, total
+
+
+def calculate_invoice_balance(invoice: Invoice) -> tuple[float, float]:
+    subtotal, tax_amount, total = calculate_invoice_totals(invoice)
+    paid = sum(payment.amount for payment in invoice.payments if payment.status.lower() == 'succeeded')
+    return total, max(total - paid, 0.0)
+
+
+def update_invoice_payment_status(invoice: Invoice) -> None:
+    total, balance = calculate_invoice_balance(invoice)
+    if balance <= 0 and invoice.status.lower() != 'paid':
+        invoice.status = 'Paid'
+    elif balance > 0 and invoice.status.lower() == 'paid':
+        invoice.status = 'Unpaid'
 
 
 ALLOWED_FREQUENCIES = {'daily', 'weekly', 'monthly', 'yearly'}
@@ -569,6 +596,67 @@ def email_invoice(invoice_id):
         app.logger.exception("Failed to send invoice email: %s", exc)
         flash('Failed to send invoice email. Check server logs.', 'error')
     return redirect(url_for('invoices'))
+
+
+@app.route('/invoice/<int:invoice_id>/payment', methods=['GET', 'POST'])
+@login_required
+def record_payment(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    total_due, balance = calculate_invoice_balance(invoice)
+
+    if request.method == 'POST':
+        try:
+            amount = float(request.form.get('amount') or 0)
+        except ValueError:
+            flash('Invalid payment amount.', 'error')
+            return redirect(url_for('record_payment', invoice_id=invoice.id))
+
+        if amount <= 0:
+            flash('Payment amount must be greater than zero.', 'error')
+            return redirect(url_for('record_payment', invoice_id=invoice.id))
+
+        provider = request.form.get('provider', 'manual') or 'manual'
+        reference = request.form.get('reference') or None
+        status = request.form.get('status', 'succeeded') or 'succeeded'
+
+        received_at_raw = request.form.get('received_at')
+        received_at = datetime.utcnow()
+        if received_at_raw:
+            try:
+                received_at = datetime.strptime(received_at_raw, '%Y-%m-%d')
+            except ValueError:
+                flash('Invalid received date format. Use YYYY-MM-DD.', 'error')
+                return redirect(url_for('record_payment', invoice_id=invoice.id))
+
+        payment = Payment(
+            invoice_id=invoice.id,
+            amount=amount,
+            currency=invoice.currency,
+            provider=provider,
+            reference=reference,
+            status=status,
+            received_at=received_at
+        )
+        db.session.add(payment)
+
+        update_invoice_payment_status(invoice)
+        try:
+            db.session.commit()
+            flash('Payment recorded successfully.', 'success')
+        except Exception as exc:  # pragma: no cover
+            db.session.rollback()
+            app.logger.exception("Failed to record payment: %s", exc)
+            flash('Failed to record payment. Please try again.', 'error')
+            return redirect(url_for('record_payment', invoice_id=invoice.id))
+
+        return redirect(url_for('invoices'))
+
+    return render_template(
+        'record_payment.html',
+        invoice=invoice,
+        total_due=total_due,
+        balance=balance,
+    )
 
 @app.route('/reports')
 @login_required

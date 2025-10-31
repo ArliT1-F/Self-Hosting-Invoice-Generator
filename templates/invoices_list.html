@@ -36,6 +36,9 @@
                 <td class="actions">
                     <a href="{{ url_for('download_pdf', invoice_id=invoice.id) }}">Download PDF</a>
                     <a href="{{ url_for('email_invoice', invoice_id=invoice.id) }}">Send Email</a>
+                {% if invoice.status|lower != 'paid' %}
+                <a href="{{ url_for('record_payment', invoice_id=invoice.id) }}">Record Payment</a>
+                {% endif %}
                 </td>
             </tr>
             {% endfor %}
