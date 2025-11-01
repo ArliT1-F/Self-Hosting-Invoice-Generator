@@ -6,13 +6,8 @@
     <title>{% block title %}Invoice App{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        :root {
-            {{ branding_style }};
-        }
-    </style>
 </head>
-<body>
+<body style="{{ branding_style|safe }}">
     <script>
         (function () {
             try {
