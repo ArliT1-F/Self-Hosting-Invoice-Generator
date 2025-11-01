@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <h2>Activity</h2>
+    <p class="form-help">Track invoice-related events and get a high-level snapshot of system activity.</p>
+
+    <div class="section-block">
+        <h3>Event counts</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Event</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if stats %}
+                    {% for event_type, count in stats %}
+                    <tr>
+                        <td>{{ event_type.replace('_', ' ')|title }}</td>
+                        <td>{{ count }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td class="table-empty" colspan="2">No events logged yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section-block">
+        <h3>Invoice statuses</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if invoice_stats %}
+                    {% for status, count in invoice_stats %}
+                    <tr>
+                        <td>{{ status }}</td>
+                        <td>{{ count }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td class="table-empty" colspan="2">No invoices created yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section-block">
+        <h3>Recent events</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Invoice</th>
+                    <th>Event</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if events %}
+                    {% for event in events %}
+                    <tr>
+                        <td>{{ format_date_locale(event.created_at, 'en-US') }}</td>
+                        <td><a href="{{ url_for('invoice_detail', invoice_id=event.invoice_id) }}">#{{ event.invoice_id }}</a></td>
+                        <td>{{ event.event_type.replace('_', ' ')|title }}</td>
+                        <td>{{ event.message or '?' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td class="table-empty" colspan="4">No audit events captured yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

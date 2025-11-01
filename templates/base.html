@@ -6,13 +6,8 @@
     <title>{% block title %}Invoice App{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        :root {
-            {{ branding_style }};
-        }
-    </style>
 </head>
-<body>
+<body data-branding-style="{{ branding_style|escape }}">
     <script>
         (function () {
             try {
@@ -26,6 +21,14 @@
                 }
                 root.setAttribute('data-theme', initial);
                 root.style.setProperty('color-scheme', initial);
+
+                const brandingStyle = document.body.dataset.brandingStyle || '';
+                brandingStyle.split(';').forEach((pair) => {
+                    const [key, value] = pair.split(':');
+                    if (key && value) {
+                        root.style.setProperty(key.trim(), value.trim());
+                    }
+                });
             } catch (error) {
                 /* no-op */
             }
@@ -49,6 +52,8 @@
                         <a href="{{ url_for('create_invoice') }}">Create Invoice</a>
                         <a href="{{ url_for('catalog') }}">Catalog</a>
                         <a href="{{ url_for('branding_settings') }}">Branding</a>
+                        <a href="{{ url_for('activity_dashboard') }}">Activity</a>
+                        <a href="{{ url_for('notification_settings') }}">Notifications</a>
                         <a href="{{ url_for('recurring_overview') }}">Recurring</a>
                         <a href="{{ url_for('reports') }}">Reports</a>
                         <a class="logout" href="{{ url_for('logout') }}">Logout</a>
