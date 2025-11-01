@@ -1,17 +1,18 @@
 # InvoicePro
 
-InvoicePro is a Flask-based web application for creating, managing, and sharing invoices. It helps small teams or freelancers streamline billing, send PDF invoices via email, track payments, and review revenue trends without leaving the browser.
+InvoicePro is a Flask-based web application for creating, scheduling, and sharing invoices. It helps small teams and freelancers automate billing, send PDF invoices by email, track payments, and review revenue trends?all from one dashboard.
 
 ## Features
 
-- **Authentication** ? Register/login/logout with hashed passwords.
-- **Invoice builder** ? Add multiple line items, set tax, choose currency/locale, and download or email polished PDFs.
-- **Recurring schedules** ? Automatically regenerate invoices on a cadence with optional reminders and auto-send.
-- **Payment tracking** ? Record payments, update balances, and mark invoices as paid automatically.
-- **Product catalog** ? Store reusable items/services to add to invoices in a click.
-- **Attachments** ? Upload receipts or supporting documents per invoice.
-- **Reporting** ? Monthly revenue summaries for a quick financial overview.
-- **Dark/light themes** ? Animated background, responsive layout, and modern UI components.
+- **Authentication** - Register/login/logout with hashed passwords.
+- **Invoice builder** - Add as many line items as you need, set tax, choose currency/locale, and export or email polished PDFs.
+- **Recurring schedules** - Automatically regenerate invoices on a cadence with optional reminders and auto-send.
+- **Payment tracking** - Record payments, update balances, and mark invoices as paid automatically.
+- **Product catalog** - Store reusable services or products for quick invoice creation.
+- **Attachments** - Upload receipts or other supporting documents per invoice.
+- **Branding & locales** - Customize logo, colors, footer, and default locale/currency; snapshots travel with each invoice.
+- **Reporting** - Monthly revenue summaries for a quick financial overview.
+- **Dark/light themes** - Animated background, responsive layout, and modern UI components.
 
 ## Quick Start
 
@@ -26,7 +27,7 @@ InvoicePro is a Flask-based web application for creating, managing, and sharing 
 2. **Run the app**
 
    ```bash
-    FLASK_APP=app.py flask run
+   FLASK_APP=app.py flask run
    ```
 
    By default the server listens on `http://127.0.0.1:5000`.
@@ -46,26 +47,27 @@ Environment variables customize behavior:
 | `MAIL_SERVER` / `MAIL_PORT` | SMTP server settings | `smtp.gmail.com` / `587` |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | Mail credentials | placeholder values |
 
-Attachments are stored under `instance/attachments/` (created automatically).
+Attachments live under `instance/attachments/`; branding logos live under `static/branding/`.
 
 ## Tech Stack
 
 - **Backend**: Python, Flask, Flask-SQLAlchemy, Flask-Login, Flask-Mail
 - **Database**: SQLite (configurable for PostgreSQL/MySQL via SQLAlchemy URI)
 - **PDF rendering**: WeasyPrint
-- **Styling**: Handmade CSS with dark/light mode support
+- **Styling**: Handmade CSS with dynamic theming
+- **Localization**: Babel for currency/date formatting
 
 ## Development Notes
 
-- The database schema is created on startup (`db.create_all()`) and includes safeguards when new columns are added.
-- Background automations (recurring invoices/reminders) are triggered on incoming requests; for production, consider moving them to a dedicated worker.
-- For deployments, configure a proper mail provider and secure secret keys.
+- The schema is bootstrapped on startup (`db.create_all()`) with light-touch migrations for new columns.
+- Recurring invoices and reminders run inside a lightweight scheduler triggered per request?consider moving to a worker for heavy traffic.
+- Configure real SMTP credentials and a unique `SECRET_KEY` before deploying.
 
 ## Roadmap Ideas
 
-- Hosted file storage (S3/GCS) for attachments
+- Hosted file storage (S3/GCS) for attachments and branding assets
 - Integrated payment gateway callbacks
-- Multi-organization support and audit logs
+- Multi-organization support and audit logging
 
 ## License
 

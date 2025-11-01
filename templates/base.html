@@ -6,6 +6,11 @@
     <title>{% block title %}Invoice App{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            {{ branding_style }};
+        }
+    </style>
 </head>
 <body>
     <script>
@@ -28,7 +33,12 @@
     </script>
     <header class="site-header">
         <div class="container nav-container">
-            <a class="brand" href="{{ url_for('landing') }}">InvoicePro</a>
+            <a class="brand" href="{{ url_for('landing') }}">
+                {% if active_branding.logo_filename %}
+                    <img src="{{ url_for('static', filename='branding/' + active_branding.logo_filename) }}" alt="{{ active_branding.name }}" class="brand-logo">
+                {% endif %}
+                <span>{{ active_branding.name }}</span>
+            </a>
             <nav class="navbar">
                 <div class="nav-links">
                     <a href="{{ url_for('landing') }}">Home</a>
@@ -38,6 +48,7 @@
                         <a href="{{ url_for('invoices') }}">Invoices</a>
                         <a href="{{ url_for('create_invoice') }}">Create Invoice</a>
                         <a href="{{ url_for('catalog') }}">Catalog</a>
+                        <a href="{{ url_for('branding_settings') }}">Branding</a>
                         <a href="{{ url_for('recurring_overview') }}">Recurring</a>
                         <a href="{{ url_for('reports') }}">Reports</a>
                         <a class="logout" href="{{ url_for('logout') }}">Logout</a>
@@ -71,7 +82,7 @@
 
     <footer class="site-footer">
         <div class="container">
-            <p>&copy; {{ datetime.utcnow().year }} InvoicePro. All rights reserved.</p>
+            <p>{{ active_branding.footer_text }}</p>
         </div>
     </footer>
     <script>

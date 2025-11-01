@@ -1,5 +1,6 @@
 import os
 import io
+import json
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, redirect, send_file, url_for, flash, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -11,6 +12,8 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import NoSuchTableError
 from dateutil.relativedelta import relativedelta
 from werkzeug.utils import secure_filename
+from babel.numbers import format_currency as babel_format_currency
+from babel.dates import format_date as babel_format_date
 
 # --- App and Config ---
 app = Flask(__name__)
@@ -23,7 +26,9 @@ app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'your-email@gmail.com')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'your-app-password')
 app.config['UPLOAD_FOLDER'] = os.path.join(app.instance_path, 'attachments')
+app.config['BRANDING_UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'branding')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['BRANDING_UPLOAD_FOLDER'], exist_ok=True)
 
 # --- Extensions ---
 db = SQLAlchemy(app)
@@ -57,6 +62,7 @@ class Invoice(db.Model):
     locale = db.Column(db.String(10), nullable=False, default='en-US')
     source_type = db.Column(db.String(20), nullable=False, default='manual')
     parent_invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=True)
+    branding_snapshot = db.Column(db.Text, nullable=True)
 
     items = db.relationship('Item', backref='invoice', lazy=True, cascade="all, delete-orphan")
     child_invoices = db.relationship(
@@ -87,6 +93,19 @@ class ProductTemplate(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class Branding(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    logo_filename = db.Column(db.String(255), nullable=True)
+    primary_color = db.Column(db.String(7), nullable=True)
+    accent_color = db.Column(db.String(7), nullable=True)
+    footer_text = db.Column(db.Text, nullable=True)
+    default_locale = db.Column(db.String(10), nullable=False, default='en-US')
+    default_currency = db.Column(db.String(3), nullable=False, default='USD')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
@@ -105,6 +124,35 @@ class InvoiceAttachment(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     storage_path = db.Column(db.String(500), nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+def serialize_branding(branding: Branding | None) -> dict:
+    if not branding:
+        return {
+            'name': 'InvoicePro',
+            'logo_filename': None,
+            'primary_color': '#4f46e5',
+            'accent_color': '#10b981',
+            'footer_text': 'Thank you for your business!',
+        }
+    return {
+        'name': branding.name or 'InvoicePro',
+        'logo_filename': branding.logo_filename,
+        'primary_color': branding.primary_color or '#4f46e5',
+        'accent_color': branding.accent_color or '#10b981',
+        'footer_text': branding.footer_text or 'Thank you for your business!',
+        'default_locale': branding.default_locale or 'en-US',
+        'default_currency': branding.default_currency or 'USD',
+    }
+
+
+def get_active_branding() -> Branding:
+    branding = Branding.query.order_by(Branding.id.asc()).first()
+    if not branding:
+        branding = Branding(name='InvoicePro')
+        db.session.add(branding)
+        db.session.commit()
+    return branding
 
 
 class RecurringSchedule(db.Model):
@@ -150,34 +198,46 @@ class InvoiceReminderLog(db.Model):
     sent_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-def ensure_invoice_columns():
-    def ensure(table_name, column_name, ddl, default=None):
-        inspector = inspect(db.engine)
-        try:
-            existing_columns = {col['name'] for col in inspector.get_columns(table_name)}
-        except NoSuchTableError:
-            return
-        if column_name in existing_columns:
-            return
-        db.session.execute(text(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}'))
-        if default is not None:
-            db.session.execute(
-                text(f'UPDATE {table_name} SET {column_name} = :default WHERE {column_name} IS NULL'),
-                {'default': default}
-            )
-        db.session.commit()
+def ensure_column(table_name, column_name, ddl, default=None):
+    inspector = inspect(db.engine)
+    try:
+        existing_columns = {col['name'] for col in inspector.get_columns(table_name)}
+    except NoSuchTableError:
+        return
+    if column_name in existing_columns:
+        return
+    db.session.execute(text(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}'))
+    if default is not None:
+        db.session.execute(
+            text(f'UPDATE {table_name} SET {column_name} = :default WHERE {column_name} IS NULL'),
+            {'default': default}
+        )
+    db.session.commit()
 
-    ensure('invoice', 'due_date', 'DATE')
-    ensure('invoice', 'currency', "VARCHAR(3) DEFAULT 'USD'", 'USD')
-    ensure('invoice', 'locale', "VARCHAR(10) DEFAULT 'en-US'", 'en-US')
-    ensure('invoice', 'source_type', "VARCHAR(20) DEFAULT 'manual'", 'manual')
-    ensure('invoice', 'parent_invoice_id', 'INTEGER')
+
+def ensure_invoice_columns():
+    ensure_column('invoice', 'due_date', 'DATE')
+    ensure_column('invoice', 'currency', "VARCHAR(3) DEFAULT 'USD'", 'USD')
+    ensure_column('invoice', 'locale', "VARCHAR(10) DEFAULT 'en-US'", 'en-US')
+    ensure_column('invoice', 'source_type', "VARCHAR(20) DEFAULT 'manual'", 'manual')
+    ensure_column('invoice', 'parent_invoice_id', 'INTEGER')
+    ensure_column('invoice', 'branding_snapshot', 'TEXT')
+
+
+def ensure_branding_columns():
+    ensure_column('branding', 'logo_filename', 'VARCHAR(255)')
+    ensure_column('branding', 'primary_color', 'VARCHAR(7)')
+    ensure_column('branding', 'accent_color', 'VARCHAR(7)')
+    ensure_column('branding', 'footer_text', 'TEXT')
+    ensure_column('branding', 'default_locale', "VARCHAR(10) DEFAULT 'en-US'", 'en-US')
+    ensure_column('branding', 'default_currency', "VARCHAR(3) DEFAULT 'USD'", 'USD')
 
 
 # Initialize Database
 with app.app_context():
     # Ensure schema is up-to-date
     ensure_invoice_columns()
+    ensure_branding_columns()
     db.create_all()
 
 # --- User Loader ---
@@ -187,7 +247,7 @@ def load_user(user_id):
 
 # --- PDF Generation ---
 def generate_pdf(html_content):
-    return HTML(string=html_content).write_pdf()
+    return HTML(string=html_content, base_url=request.host_url).write_pdf()
 
 
 def calculate_invoice_totals(invoice):
@@ -215,6 +275,39 @@ def allowed_attachment(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_ATTACHMENT_EXTENSIONS
 
 
+def allowed_logo(filename: str) -> bool:
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_LOGO_EXTENSIONS
+
+
+def format_currency_locale(amount: float, currency: str, locale: str) -> str:
+    try:
+        return babel_format_currency(amount, currency, locale=locale.replace('-', '_'))
+    except Exception:  # pragma: no cover - fallback path
+        return f"{currency} {amount:,.2f}"
+
+
+def format_date_locale(value: date | datetime, locale: str) -> str:
+    try:
+        if isinstance(value, datetime):
+            value = value.date()
+        return babel_format_date(value, format='long', locale=locale.replace('-', '_'))
+    except Exception:  # pragma: no cover
+        return value.strftime('%Y-%m-%d') if hasattr(value, 'strftime') else str(value)
+
+
+def load_invoice_branding(invoice: Invoice) -> dict:
+    defaults = serialize_branding(get_active_branding())
+    if invoice.branding_snapshot:
+        try:
+            data = json.loads(invoice.branding_snapshot)
+            for key, value in data.items():
+                if value not in (None, ''):
+                    defaults[key] = value
+        except json.JSONDecodeError:
+            pass
+    return defaults
+
+
 ALLOWED_FREQUENCIES = {'daily', 'weekly', 'monthly', 'yearly'}
 SCHEDULE_PROCESS_INTERVAL_SECONDS = 60
 REMINDER_PROCESS_INTERVAL_SECONDS = 120
@@ -224,6 +317,8 @@ ALLOWED_ATTACHMENT_EXTENSIONS = {
     'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'zip'
 }
 ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+ALLOWED_LOGO_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'svg'}
+LOGO_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
 
 
 def parse_date(value, fallback=None):
@@ -272,6 +367,8 @@ def clone_invoice_from_schedule(schedule: RecurringSchedule) -> Invoice | None:
     if status_value.lower() == 'paid':
         status_value = 'Unpaid'
 
+    snapshot_data = template.branding_snapshot or json.dumps(serialize_branding(get_active_branding()))
+
     new_invoice = Invoice(
         client_name=template.client_name,
         client_email=template.client_email,
@@ -282,7 +379,8 @@ def clone_invoice_from_schedule(schedule: RecurringSchedule) -> Invoice | None:
         locale=template.locale,
         source_type='recurring',
         parent_invoice_id=template.id,
-        due_date=(datetime.utcnow() + timedelta(days=schedule.due_after_days)).date()
+        due_date=(datetime.utcnow() + timedelta(days=schedule.due_after_days)).date(),
+        branding_snapshot=snapshot_data,
     )
     db.session.add(new_invoice)
     db.session.flush()
@@ -303,12 +401,14 @@ def clone_invoice_from_schedule(schedule: RecurringSchedule) -> Invoice | None:
 
 def send_invoice_email(invoice: Invoice, subject: str | None = None, body: str | None = None, attach_pdf: bool = True) -> None:
     subtotal, tax_amount, total = calculate_invoice_totals(invoice)
+    branding = load_invoice_branding(invoice)
     html = render_template(
         'invoice_pdf.html',
         invoice=invoice,
         subtotal=subtotal,
         tax_amount=tax_amount,
         total=total,
+        branding=branding,
     )
     pdf = generate_pdf(html) if attach_pdf else None
 
@@ -426,8 +526,19 @@ def trigger_automations():
 # --- Template Helpers ---
 @app.context_processor
 def inject_utilities():
+    branding = serialize_branding(get_active_branding())
+    css_vars = {
+        '--primary': branding['primary_color'],
+        '--accent': branding['accent_color'],
+        '--primary-dark': branding['primary_color'],
+    }
+    branding_style = '; '.join(f"{key}: {value}" for key, value in css_vars.items())
     return {
         'datetime': datetime,
+        'active_branding': branding,
+        'branding_style': branding_style,
+        'format_money': format_currency_locale,
+        'format_date_locale': format_date_locale,
     }
 
 
@@ -550,10 +661,70 @@ def delete_catalog_template(template_id):
     flash('Catalog item deleted.', 'success')
     return redirect(url_for('catalog'))
 
+@app.route('/branding', methods=['GET', 'POST'])
+@login_required
+def branding_settings():
+    branding = get_active_branding()
+    if request.method == 'POST':
+        if request.form.get('action') == 'delete_logo':
+            if branding.logo_filename:
+                logo_path = os.path.join(app.config['BRANDING_UPLOAD_FOLDER'], branding.logo_filename)
+                try:
+                    if os.path.exists(logo_path):
+                        os.remove(logo_path)
+                except OSError as exc:  # pragma: no cover
+                    app.logger.warning('Failed to delete branding logo: %s', exc)
+                branding.logo_filename = None
+                db.session.commit()
+                flash('Logo removed.', 'success')
+            return redirect(url_for('branding_settings'))
+
+        branding.name = (request.form.get('name') or branding.name or 'InvoicePro').strip() or 'InvoicePro'
+        branding.primary_color = (request.form.get('primary_color') or '#4f46e5').strip() or '#4f46e5'
+        if branding.primary_color and not branding.primary_color.startswith('#'):
+            branding.primary_color = f"#{branding.primary_color}"
+        branding.accent_color = (request.form.get('accent_color') or '#10b981').strip() or '#10b981'
+        if branding.accent_color and not branding.accent_color.startswith('#'):
+            branding.accent_color = f"#{branding.accent_color}"
+        branding.footer_text = (request.form.get('footer_text') or '').strip() or 'Thank you for your business!'
+        branding.default_locale = (request.form.get('default_locale') or 'en-US').strip() or 'en-US'
+        branding.default_currency = (request.form.get('default_currency') or 'USD').strip().upper() or 'USD'
+
+        upload = request.files.get('logo')
+        if upload and upload.filename:
+            filename = secure_filename(upload.filename)
+            if filename:
+                if not allowed_logo(filename):
+                    flash('Logo must be an image (png, jpg, jpeg, gif, svg).', 'error')
+                    return redirect(url_for('branding_settings'))
+                if upload.content_length and upload.content_length > LOGO_MAX_BYTES:
+                    flash('Logo file too large (limit 2MB).', 'error')
+                    return redirect(url_for('branding_settings'))
+                storage_name = f"logo_{int(datetime.utcnow().timestamp())}_{filename}"
+                storage_path = os.path.join(app.config['BRANDING_UPLOAD_FOLDER'], storage_name)
+                upload.save(storage_path)
+                if branding.logo_filename:
+                    old_path = os.path.join(app.config['BRANDING_UPLOAD_FOLDER'], branding.logo_filename)
+                    try:
+                        if os.path.exists(old_path):
+                            os.remove(old_path)
+                    except OSError:
+                        pass
+                branding.logo_filename = storage_name
+
+        db.session.commit()
+        flash('Branding updated.', 'success')
+        return redirect(url_for('branding_settings'))
+
+    preview = serialize_branding(branding)
+    return render_template('branding.html', branding=branding, preview=preview)
+
+
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_invoice():
     product_templates = ProductTemplate.query.filter_by(is_active=True).order_by(ProductTemplate.name.asc()).all()
+    branding_defaults = serialize_branding(get_active_branding())
     if request.method == 'POST':
         descs = request.form.getlist('desc')
         qtys = request.form.getlist('qty')
@@ -571,11 +742,11 @@ def create_invoice():
         if due_date is None:
             due_date = datetime.utcnow().date() + timedelta(days=14)
 
-        currency = (request.form.get('currency') or 'USD').upper()
+        currency = (request.form.get('currency') or branding_defaults['default_currency']).upper()
         if len(currency) != 3:
             currency = 'USD'
 
-        locale_value = request.form.get('locale') or 'en-US'
+        locale_value = request.form.get('locale') or branding_defaults['default_locale']
 
         invoice = Invoice(
             client_name=request.form['client_name'],
@@ -586,6 +757,7 @@ def create_invoice():
             due_date=due_date,
             currency=currency,
             locale=locale_value,
+            branding_snapshot=json.dumps(branding_defaults),
         )
 
         db.session.add(invoice)
@@ -660,19 +832,21 @@ def create_invoice():
         else:
             flash('Invoice created successfully.', 'success')
         return redirect(url_for('invoices'))
-    return render_template('create_invoice.html', product_templates=product_templates)
+    return render_template('create_invoice.html', product_templates=product_templates, branding_defaults=branding_defaults)
 
 @app.route('/invoice/<int:invoice_id>/pdf')
 @login_required
 def download_pdf(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     subtotal, tax_amount, total = calculate_invoice_totals(invoice)
+    branding = load_invoice_branding(invoice)
     html = render_template(
         'invoice_pdf.html',
         invoice=invoice,
         subtotal=subtotal,
         tax_amount=tax_amount,
         total=total,
+        branding=branding,
     )
     pdf = generate_pdf(html)
     return send_file(io.BytesIO(pdf), download_name=f'invoice_{invoice.id}.pdf', as_attachment=True)
@@ -755,6 +929,7 @@ def record_payment(invoice_id):
 def invoice_detail(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     total_due, balance = calculate_invoice_balance(invoice)
+    branding = load_invoice_branding(invoice)
 
     if request.method == 'POST':
         if 'attachment' not in request.files:
@@ -797,6 +972,7 @@ def invoice_detail(invoice_id):
         invoice=invoice,
         total_due=total_due,
         balance=balance,
+        branding=branding,
     )
 
 

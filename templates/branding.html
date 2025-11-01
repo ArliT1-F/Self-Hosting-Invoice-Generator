@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <h2>Branding</h2>
+    <p class="form-help">Customize how your invoices look and feel. Updates apply to future invoices; existing invoices keep their saved snapshot.</p>
+
+    <form method="POST" enctype="multipart/form-data" class="form-grid section-block">
+        <label>
+            <span>Brand name</span>
+            <input type="text" name="name" value="{{ branding.name }}" required>
+        </label>
+        <label>
+            <span>Default locale</span>
+            <select name="default_locale">
+                {% set locale = preview.default_locale %}
+                <option value="en-US" {% if locale == 'en-US' %}selected{% endif %}>English (US)</option>
+                <option value="en-GB" {% if locale == 'en-GB' %}selected{% endif %}>English (UK)</option>
+                <option value="fr-FR" {% if locale == 'fr-FR' %}selected{% endif %}>French (FR)</option>
+                <option value="de-DE" {% if locale == 'de-DE' %}selected{% endif %}>German (DE)</option>
+                <option value="es-ES" {% if locale == 'es-ES' %}selected{% endif %}>Spanish (ES)</option>
+            </select>
+        </label>
+        <label>
+            <span>Default currency</span>
+            <select name="default_currency">
+                {% set currency = preview.default_currency %}
+                <option value="USD" {% if currency == 'USD' %}selected{% endif %}>USD</option>
+                <option value="EUR" {% if currency == 'EUR' %}selected{% endif %}>EUR</option>
+                <option value="GBP" {% if currency == 'GBP' %}selected{% endif %}>GBP</option>
+                <option value="AUD" {% if currency == 'AUD' %}selected{% endif %}>AUD</option>
+                <option value="CAD" {% if currency == 'CAD' %}selected{% endif %}>CAD</option>
+            </select>
+        </label>
+        <label>
+            <span>Primary color</span>
+            <input type="color" name="primary_color" value="{{ preview.primary_color }}">
+        </label>
+        <label>
+            <span>Accent color</span>
+            <input type="color" name="accent_color" value="{{ preview.accent_color }}">
+        </label>
+        <label class="grid-span-2">
+            <span>Footer message</span>
+            <textarea name="footer_text" placeholder="Thank you for your business!">{{ branding.footer_text }}</textarea>
+        </label>
+        <label class="grid-span-2">
+            <span>Logo</span>
+            <input type="file" name="logo" accept="image/*">
+            <span class="form-help">PNG/JPEG/GIF recommended. We'll resize it when rendering invoices.</span>
+        </label>
+        <div class="hero-actions">
+            <button type="submit" name="action" value="save">Save branding</button>
+            {% if branding.logo_filename %}
+            <button type="submit" name="action" value="delete_logo" class="btn-secondary">Remove logo</button>
+            {% endif %}
+        </div>
+    </form>
+
+    <div class="section-block">
+        <h3>Preview</h3>
+        <div class="branding-preview" style="border:1px solid {{ preview.primary_color }}; border-radius:12px; padding:1.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid {{ preview.primary_color }}; padding-bottom:0.75rem;">
+                <div>
+                    <h4 style="margin:0; color:{{ preview.primary_color }};">{{ preview.name }}</h4>
+                    <p style="margin:0; color:#6b7280;">Invoice example ? {{ preview.default_locale }} ? {{ preview.default_currency }}</p>
+                </div>
+                {% if preview.logo_filename %}
+                <img src="{{ url_for('static', filename='branding/' + preview.logo_filename) }}" alt="Preview logo" style="max-height:48px;">
+                {% endif %}
+            </div>
+            <p style="margin-top:1rem; color:#1f2933;">Invoices will use the selected colors, locale, and footer. Existing invoices keep their saved branding snapshot.</p>
+            <p style="margin-top:1rem; font-size:0.9rem; color:#6b7280;">{{ preview.footer_text }}</p>
+        </div>
+    </div>
+</section>
+{% endblock %}

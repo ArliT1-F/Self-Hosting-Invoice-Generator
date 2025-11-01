@@ -2,7 +2,7 @@
 {% block content %}
 <section class="card">
     <h2>Invoice #{{ invoice.id }}</h2>
-    <p class="form-help">Created {{ invoice.created_at.strftime('%Y-%m-%d') }} ? Status: {{ invoice.status }} ? Balance: {{ '{:.2f}'.format(balance) }} {{ invoice.currency }}</p>
+    <p class="form-help">Created {{ format_date_locale(invoice.created_at, invoice.locale) }} | Status: {{ invoice.status }} | Total: {{ format_money(total_due, invoice.currency, invoice.locale) }} | Balance: {{ format_money(balance, invoice.currency, invoice.locale) }}</p>
 
     <div class="section-block">
         <h3>Client</h3>
@@ -29,7 +29,7 @@
                     {% for attachment in invoice.attachments %}
                     <tr>
                         <td>{{ attachment.filename }}</td>
-                        <td>{{ attachment.uploaded_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ format_date_locale(attachment.uploaded_at, invoice.locale) }}</td>
                         <td class="actions">
                             <a href="{{ url_for('download_attachment', invoice_id=invoice.id, attachment_id=attachment.id) }}">Download</a>
                             <form class="inline-form" method="POST" action="{{ url_for('delete_attachment', invoice_id=invoice.id, attachment_id=attachment.id) }}" onsubmit="return confirm('Delete this attachment?');">

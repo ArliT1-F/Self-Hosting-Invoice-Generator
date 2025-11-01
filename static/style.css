@@ -145,6 +145,14 @@ body.theme-dark::after {
     color: var(--primary);
     text-decoration: none;
     letter-spacing: -0.02em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.brand-logo {
+    max-height: 36px;
+    width: auto;
 }
 
 .navbar {
@@ -420,6 +428,11 @@ button[type="button"] {
 
 .catalog-picker .btn-secondary {
     text-decoration: none;
+}
+
+.branding-preview {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(10px);
 }
 
 .flash-stack {
