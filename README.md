@@ -11,6 +11,7 @@ InvoicePro is a Flask-based web application for creating, scheduling, and sharin
 - **Product catalog** - Store reusable services or products for quick invoice creation.
 - **Attachments** - Upload receipts or other supporting documents per invoice.
 - **Branding & locales** - Customize logo, colors, footer, and default locale/currency; snapshots travel with each invoice.
+- **Audit trail & notifications** - Automatic event logging plus configurable email/Slack stubs.
 - **Reporting** - Monthly revenue summaries for a quick financial overview.
 - **Dark/light themes** - Animated background, responsive layout, and modern UI components.
 

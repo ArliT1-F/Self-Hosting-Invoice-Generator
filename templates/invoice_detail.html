@@ -47,6 +47,34 @@
         </table>
     </div>
 
+    <div class="section-block">
+        <h3>Audit trail</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Event</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if events %}
+                    {% for event in events %}
+                    <tr>
+                        <td>{{ format_date_locale(event.created_at, invoice.locale) }}</td>
+                        <td>{{ event.event_type.replace('_', ' ')|title }}</td>
+                        <td>{{ event.message or '?' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td class="table-empty" colspan="3">No events recorded for this invoice yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
     <div class="hero-actions">
         <a class="btn-secondary" href="{{ url_for('invoices') }}">Back to invoices</a>
         <a class="btn-primary" href="{{ url_for('record_payment', invoice_id=invoice.id) }}">Record payment</a>

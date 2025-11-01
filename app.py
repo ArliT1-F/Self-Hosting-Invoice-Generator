@@ -74,6 +74,7 @@ class Invoice(db.Model):
     schedules = db.relationship('RecurringSchedule', backref='template_invoice', lazy=True, cascade="all, delete-orphan")
     payments = db.relationship('Payment', backref='invoice', lazy=True, cascade="all, delete-orphan")
     attachments = db.relationship('InvoiceAttachment', backref='invoice', lazy=True, cascade="all, delete-orphan")
+    audit_events = db.relationship('InvoiceAuditEvent', backref='invoice', lazy=True, cascade="all, delete-orphan")
 
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -124,6 +125,24 @@ class InvoiceAttachment(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     storage_path = db.Column(db.String(500), nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class InvoiceAuditEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+    event_type = db.Column(db.String(50), nullable=False)
+    message = db.Column(db.Text, nullable=True)
+    payload = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class NotificationSubscription(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    channel = db.Column(db.String(20), nullable=False)
+    destination = db.Column(db.String(255), nullable=False)
+    event_type = db.Column(db.String(50), nullable=False, default='invoice_created')
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 def serialize_branding(branding: Branding | None) -> dict:
@@ -308,6 +327,38 @@ def load_invoice_branding(invoice: Invoice) -> dict:
     return defaults
 
 
+def record_audit_event(invoice: Invoice, event_type: str, message: str = '', payload: dict | None = None) -> InvoiceAuditEvent:
+    if event_type not in AUDIT_EVENT_TYPES:
+        app.logger.warning('Unknown audit event type: %s', event_type)
+    event = InvoiceAuditEvent(
+        invoice_id=invoice.id,
+        event_type=event_type,
+        message=message,
+        payload=json.dumps(payload) if payload else None,
+    )
+    db.session.add(event)
+    db.session.flush()
+    dispatch_notifications(event)
+    return event
+
+
+def dispatch_notifications(event: InvoiceAuditEvent) -> None:
+    subscriptions = NotificationSubscription.query.filter(
+        NotificationSubscription.is_active.is_(True),
+        NotificationSubscription.event_type.in_([event.event_type, 'all'])
+    ).all()
+    if not subscriptions:
+        return
+    summary = event.message or f"Event '{event.event_type}' recorded for invoice #{event.invoice_id}."
+    for subscription in subscriptions:
+        if subscription.channel == 'email':
+            app.logger.info("[Notification::Email] -> %s | %s", subscription.destination, summary)
+        elif subscription.channel == 'slack':
+            app.logger.info("[Notification::Slack] -> %s | %s", subscription.destination, summary)
+        else:
+            app.logger.info("[Notification::%s] -> %s | %s", subscription.channel, subscription.destination, summary)
+
+
 ALLOWED_FREQUENCIES = {'daily', 'weekly', 'monthly', 'yearly'}
 SCHEDULE_PROCESS_INTERVAL_SECONDS = 60
 REMINDER_PROCESS_INTERVAL_SECONDS = 120
@@ -319,6 +370,15 @@ ALLOWED_ATTACHMENT_EXTENSIONS = {
 ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 ALLOWED_LOGO_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'svg'}
 LOGO_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
+AUDIT_EVENT_TYPES = [
+    'invoice_created',
+    'invoice_auto_generated',
+    'invoice_email_sent',
+    'payment_recorded',
+    'attachment_uploaded',
+    'attachment_deleted',
+    'reminder_sent',
+]
 
 
 def parse_date(value, fallback=None):
@@ -421,6 +481,12 @@ def send_invoice_email(invoice: Invoice, subject: str | None = None, body: str |
     if attach_pdf and pdf:
         message.attach(f"invoice_{invoice.id}.pdf", "application/pdf", pdf)
     mail.send(message)
+    record_audit_event(
+        invoice,
+        'invoice_email_sent',
+        message=f"Invoice emailed to {invoice.client_email}.",
+        payload={'subject': message.subject},
+    )
 
 
 def process_recurring_schedules(now: datetime | None = None) -> int:
@@ -441,6 +507,12 @@ def process_recurring_schedules(now: datetime | None = None) -> int:
             continue
 
         processed += 1
+        record_audit_event(
+            new_invoice,
+            'invoice_auto_generated',
+            message=f"Invoice #{new_invoice.id} generated from schedule #{schedule.id}.",
+            payload={'schedule_id': schedule.id},
+        )
         schedule.next_run_at = next_run or add_frequency(now, schedule.frequency, schedule.interval)
         schedule.updated_at = datetime.utcnow()
         changes = True
@@ -497,6 +569,12 @@ def process_recurring_reminders(now: datetime | None = None) -> int:
                         f"Hi {invoice.client_name},\nThis is a friendly reminder that your invoice "
                         f"#{invoice.id} is due on {invoice.due_date.strftime('%Y-%m-%d')}."
                     )
+                )
+                record_audit_event(
+                    invoice,
+                    'reminder_sent',
+                    message=f"Reminder email sent ({reminder.offset_days} day offset).",
+                    payload={'offset_days': reminder.offset_days},
                 )
                 db.session.add(InvoiceReminderLog(reminder_id=reminder.id, invoice_id=invoice.id))
                 sent += 1
@@ -720,6 +798,72 @@ def branding_settings():
     return render_template('branding.html', branding=branding, preview=preview)
 
 
+@app.route('/activity')
+@login_required
+def activity_dashboard():
+    recent_events = InvoiceAuditEvent.query.order_by(InvoiceAuditEvent.created_at.desc()).limit(50).all()
+    stats = db.session.query(
+        InvoiceAuditEvent.event_type,
+        db.func.count(InvoiceAuditEvent.id)
+    ).group_by(InvoiceAuditEvent.event_type).all()
+    invoice_stats = db.session.query(
+        Invoice.status,
+        db.func.count(Invoice.id)
+    ).group_by(Invoice.status).all()
+    return render_template(
+        'audit_dashboard.html',
+        events=recent_events,
+        stats=stats,
+        invoice_stats=invoice_stats,
+    )
+
+
+@app.route('/notifications', methods=['GET', 'POST'])
+@login_required
+def notification_settings():
+    if request.method == 'POST':
+        action = request.form.get('action', 'create')
+        if action == 'delete':
+            subscription = NotificationSubscription.query.get_or_404(int(request.form['subscription_id']))
+            db.session.delete(subscription)
+            db.session.commit()
+            flash('Notification subscription deleted.', 'success')
+            return redirect(url_for('notification_settings'))
+        if action == 'toggle':
+            subscription = NotificationSubscription.query.get_or_404(int(request.form['subscription_id']))
+            subscription.is_active = not subscription.is_active
+            db.session.commit()
+            flash(f"Subscription {'activated' if subscription.is_active else 'paused'}.", 'success')
+            return redirect(url_for('notification_settings'))
+
+        channel = (request.form.get('channel') or 'email').strip()
+        destination = (request.form.get('destination') or '').strip()
+        event_type = (request.form.get('event_type') or 'invoice_created').strip()
+        if not destination:
+            flash('Destination is required.', 'error')
+            return redirect(url_for('notification_settings'))
+        if event_type not in AUDIT_EVENT_TYPES + ['all']:
+            flash('Unknown event type.', 'error')
+            return redirect(url_for('notification_settings'))
+        subscription = NotificationSubscription(
+            channel=channel,
+            destination=destination,
+            event_type=event_type,
+            is_active=True,
+        )
+        db.session.add(subscription)
+        db.session.commit()
+        flash('Notification subscription saved.', 'success')
+        return redirect(url_for('notification_settings'))
+
+    subscriptions = NotificationSubscription.query.order_by(NotificationSubscription.created_at.desc()).all()
+    return render_template(
+        'notifications.html',
+        subscriptions=subscriptions,
+        event_types=AUDIT_EVENT_TYPES,
+    )
+
+
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_invoice():
@@ -825,6 +969,13 @@ def create_invoice():
                         db.session.add(RecurringReminder(schedule_id=schedule.id, offset_days=offset_days))
                 schedule_created = True
 
+        total_value = calculate_invoice_totals(invoice)[2]
+        record_audit_event(
+            invoice,
+            'invoice_created',
+            message=f"Invoice #{invoice.id} created for {invoice.client_name}.",
+            payload={'total': total_value, 'status': invoice.status},
+        )
         db.session.commit()
 
         if schedule_created:
@@ -857,6 +1008,7 @@ def email_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     try:
         send_invoice_email(invoice)
+        db.session.commit()
         flash('Invoice emailed to client.', 'success')
     except Exception as exc:  # pragma: no cover - defensive logging
         app.logger.exception("Failed to send invoice email: %s", exc)
@@ -906,6 +1058,12 @@ def record_payment(invoice_id):
         db.session.add(payment)
 
         update_invoice_payment_status(invoice)
+        record_audit_event(
+            invoice,
+            'payment_recorded',
+            message=f"Payment of {amount:.2f} {invoice.currency} recorded via {provider}.",
+            payload={'amount': amount, 'status': status, 'provider': provider, 'reference': reference},
+        )
         try:
             db.session.commit()
             flash('Payment recorded successfully.', 'success')
@@ -930,6 +1088,7 @@ def invoice_detail(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     total_due, balance = calculate_invoice_balance(invoice)
     branding = load_invoice_branding(invoice)
+    events = InvoiceAuditEvent.query.filter_by(invoice_id=invoice.id).order_by(InvoiceAuditEvent.created_at.desc()).limit(20).all()
 
     if request.method == 'POST':
         if 'attachment' not in request.files:
@@ -963,6 +1122,12 @@ def invoice_detail(invoice_id):
             storage_path=storage_path
         )
         db.session.add(attachment)
+        record_audit_event(
+            invoice,
+            'attachment_uploaded',
+            message=f"Attachment '{filename}' uploaded.",
+            payload={'filename': filename},
+        )
         db.session.commit()
         flash('Attachment uploaded.', 'success')
         return redirect(url_for('invoice_detail', invoice_id=invoice.id))
@@ -973,6 +1138,7 @@ def invoice_detail(invoice_id):
         total_due=total_due,
         balance=balance,
         branding=branding,
+        events=events,
     )
 
 
@@ -996,6 +1162,12 @@ def delete_attachment(invoice_id, attachment_id):
     except OSError as exc:  # pragma: no cover - cleanup safety
         app.logger.warning('Failed to delete attachment file: %s', exc)
     db.session.delete(attachment)
+    record_audit_event(
+        attachment.invoice,
+        'attachment_deleted',
+        message=f"Attachment '{attachment.filename}' deleted.",
+        payload={'filename': attachment.filename},
+    )
     db.session.commit()
     flash('Attachment removed.', 'success')
     return redirect(url_for('invoice_detail', invoice_id=invoice_id))

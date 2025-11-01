@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <h2>Notifications</h2>
+    <p class="form-help">Set up delivery stubs for key events. The current implementation logs outgoing messages to the server console.</p>
+
+    <form method="POST" class="form-grid section-block">
+        <label>
+            <span>Channel</span>
+            <select name="channel">
+                <option value="email">Email (stub)</option>
+                <option value="slack">Slack (stub)</option>
+            </select>
+        </label>
+        <label>
+            <span>Destination</span>
+            <input type="text" name="destination" placeholder="user@example.com or https://hooks.slack.com/..." required>
+        </label>
+        <label>
+            <span>Event</span>
+            <select name="event_type">
+                <option value="all">All events</option>
+                {% for event in event_types %}
+                <option value="{{ event }}">{{ event.replace('_', ' ')|title }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <div class="hero-actions">
+            <button type="submit">Add subscription</button>
+        </div>
+    </form>
+
+    <div class="section-block">
+        <h3>Existing subscriptions</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Channel</th>
+                    <th>Destination</th>
+                    <th>Event</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if subscriptions %}
+                    {% for sub in subscriptions %}
+                    <tr>
+                        <td>{{ sub.channel|title }}</td>
+                        <td>{{ sub.destination }}</td>
+                        <td>{{ sub.event_type.replace('_', ' ')|title }}</td>
+                        <td>
+                            <span class="badge {{ 'status-paid' if sub.is_active else 'status-unpaid' }}">{{ 'Active' if sub.is_active else 'Paused' }}</span>
+                        </td>
+                        <td>
+                            <form method="POST" class="inline-form" action="{{ url_for('notification_settings') }}">
+                                <input type="hidden" name="action" value="toggle">
+                                <input type="hidden" name="subscription_id" value="{{ sub.id }}">
+                                <button type="submit" class="btn-secondary">{{ 'Pause' if sub.is_active else 'Activate' }}</button>
+                            </form>
+                            <form method="POST" class="inline-form" action="{{ url_for('notification_settings') }}" onsubmit="return confirm('Delete this subscription?');">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="subscription_id" value="{{ sub.id }}">
+                                <button type="submit" class="btn-secondary">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td class="table-empty" colspan="5">No notification subscriptions yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
