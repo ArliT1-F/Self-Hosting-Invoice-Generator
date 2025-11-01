@@ -54,6 +54,9 @@
                         <a href="{{ url_for('branding_settings') }}">Branding</a>
                         <a href="{{ url_for('activity_dashboard') }}">Activity</a>
                         <a href="{{ url_for('notification_settings') }}">Notifications</a>
+                        {% if current_user.username == 'admin' %}
+                        <a href="{{ url_for('manage_users') }}">Users</a>
+                        {% endif %}
                         <a href="{{ url_for('recurring_overview') }}">Recurring</a>
                         <a href="{{ url_for('reports') }}">Reports</a>
                         <a class="logout" href="{{ url_for('logout') }}">Logout</a>

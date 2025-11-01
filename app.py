@@ -864,6 +864,38 @@ def notification_settings():
     )
 
 
+@app.route('/admin/users', methods=['GET', 'POST'])
+@login_required
+def manage_users():
+    if current_user.username != 'admin':
+        abort(403)
+
+    users = User.query.order_by(User.username.asc()).all()
+    if request.method == 'POST':
+        username = request.form.get('username')
+        raw_password = request.form.get('raw_password')
+        password_hash = request.form.get('password_hash')
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            flash('User not found.', 'error')
+            return redirect(url_for('manage_users'))
+
+        if raw_password:
+            user.set_password(raw_password)
+            flash(f"Password updated for {username}.", 'success')
+        elif password_hash:
+            user.password_hash = password_hash.strip()
+            flash(f"Password hash replaced for {username}.", 'success')
+        else:
+            flash('Provide a new password or password hash.', 'error')
+            return redirect(url_for('manage_users'))
+
+        db.session.commit()
+        return redirect(url_for('manage_users'))
+
+    return render_template('admin_users.html', users=users)
+
+
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_invoice():
