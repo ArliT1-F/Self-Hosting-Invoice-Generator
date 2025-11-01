@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <h2>User management</h2>
+    <p class="form-help">Only the admin can edit passwords. Provide a new password or a precomputed hash.</p>
+
+    <form method="POST" class="form-grid section-block">
+        <label>
+            <span>Username</span>
+            <select name="username">
+                {% for user in users %}
+                <option value="{{ user.username }}">{{ user.username }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>New password</span>
+            <input type="password" name="raw_password" placeholder="Leave blank to use hash">
+        </label>
+        <label class="grid-span-2">
+            <span>Or paste password hash</span>
+            <input type="text" name="password_hash" placeholder="scrypt:...">
+        </label>
+        <div class="hero-actions">
+            <button type="submit">Update user</button>
+        </div>
+    </form>
+
+    <div class="section-block">
+        <h3>Users</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.email }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
