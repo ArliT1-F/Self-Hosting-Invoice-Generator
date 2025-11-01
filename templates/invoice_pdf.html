@@ -4,22 +4,87 @@
     <meta charset="utf-8">
     <title>Invoice #{{ invoice.id }}</title>
     <style>
-        body { font-family: sans-serif; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #333; padding: 8px; text-align: left; }
-        .summary { margin-top: 20px; }
-        .summary p { margin: 4px 0; }
+        :root {
+            --primary: {{ branding.primary_color }};
+            --accent: {{ branding.accent_color }};
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            color: #1f2933;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--primary);
+            padding-bottom: 16px;
+        }
+        header h1 {
+            margin: 0;
+            color: var(--primary);
+            font-size: 28px;
+        }
+        header img {
+            max-height: 60px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 24px;
+        }
+        thead tr {
+            background: rgba(79, 70, 229, 0.1);
+        }
+        th, td {
+            border: 1px solid #d1d5db;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        .summary {
+            margin-top: 24px;
+            max-width: 320px;
+            margin-left: auto;
+        }
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .summary-row:last-child {
+            border-bottom: 3px solid var(--primary);
+            font-weight: 700;
+        }
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+        }
     </style>
 </head>
 <body>
-    <h1>Invoice #{{ invoice.id }}</h1>
+    <header>
+        <div>
+            <h1>{{ branding.name }}</h1>
+            <p><strong>Invoice #{{ invoice.id }}</strong><br>
+               Issued on {{ format_date_locale(invoice.created_at, invoice.locale) }}
+               {% if invoice.due_date %}<br>Due by {{ format_date_locale(invoice.due_date, invoice.locale) }}{% endif %}
+            </p>
+        </div>
+        {% if branding.logo_filename %}
+        <img src="{{ url_for('static', filename='branding/' + branding.logo_filename) }}" alt="{{ branding.name }} logo">
+        {% endif %}
+    </header>
     <p><strong>Client:</strong> {{ invoice.client_name }}</p>
     <p><strong>Email:</strong> {{ invoice.client_email }}</p>
     <p><strong>Address:</strong> {{ invoice.client_address }}</p>
     <p><strong>Status:</strong> {{ invoice.status }}</p>
-    <p><strong>Date:</strong> {{ invoice.created_at.strftime('%Y-%m-%d') }}</p>
+    {% set issue_date = format_date_locale(invoice.created_at, invoice.locale) %}
     {% if invoice.due_date %}
-    <p><strong>Due Date:</strong> {{ invoice.due_date.strftime('%Y-%m-%d') }}</p>
+    <p><strong>Due Date:</strong> {{ format_date_locale(invoice.due_date, invoice.locale) }}</p>
     {% endif %}
 
     <table>
@@ -36,17 +101,30 @@
             <tr>
                 <td>{{ item.description }}</td>
                 <td>{{ item.quantity }}</td>
-                <td>${{ '%.2f' % item.rate }}</td>
-                <td>${{ '%.2f' % (item.quantity * item.rate) }}</td>
+                <td>{{ format_money(item.rate, invoice.currency, invoice.locale) }}</td>
+                <td>{{ format_money(item.quantity * item.rate, invoice.currency, invoice.locale) }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
     <div class="summary">
-        <p><strong>Subtotal:</strong> ${{ '%.2f' % subtotal }}</p>
-        <p><strong>Tax ({{ invoice.tax }}%):</strong> ${{ '%.2f' % tax_amount }}</p>
-        <p><strong>Total:</strong> ${{ '%.2f' % total }}</p>
+        <div class="summary-row">
+            <span>Subtotal</span>
+            <span>{{ format_money(subtotal, invoice.currency, invoice.locale) }}</span>
+        </div>
+        <div class="summary-row">
+            <span>Tax ({{ invoice.tax }}%)</span>
+            <span>{{ format_money(tax_amount, invoice.currency, invoice.locale) }}</span>
+        </div>
+        <div class="summary-row">
+            <span>Total</span>
+            <span>{{ format_money(total, invoice.currency, invoice.locale) }}</span>
+        </div>
     </div>
+
+    <footer>
+        {{ branding.footer_text }}
+    </footer>
 </body>
 </html>

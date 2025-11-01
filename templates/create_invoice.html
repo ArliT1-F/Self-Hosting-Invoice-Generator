@@ -35,21 +35,23 @@
         <label>
             <span>Currency</span>
             <select name="currency">
-                <option value="USD" selected>USD</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-                <option value="AUD">AUD</option>
-                <option value="CAD">CAD</option>
+                {% set cur = branding_defaults.default_currency %}
+                <option value="USD" {% if cur == 'USD' %}selected{% endif %}>USD</option>
+                <option value="EUR" {% if cur == 'EUR' %}selected{% endif %}>EUR</option>
+                <option value="GBP" {% if cur == 'GBP' %}selected{% endif %}>GBP</option>
+                <option value="AUD" {% if cur == 'AUD' %}selected{% endif %}>AUD</option>
+                <option value="CAD" {% if cur == 'CAD' %}selected{% endif %}>CAD</option>
             </select>
         </label>
         <label>
             <span>Locale</span>
             <select name="locale">
-                <option value="en-US" selected>English (US)</option>
-                <option value="en-GB">English (UK)</option>
-                <option value="fr-FR">French (FR)</option>
-                <option value="de-DE">German (DE)</option>
-                <option value="es-ES">Spanish (ES)</option>
+                {% set loc = branding_defaults.default_locale %}
+                <option value="en-US" {% if loc == 'en-US' %}selected{% endif %}>English (US)</option>
+                <option value="en-GB" {% if loc == 'en-GB' %}selected{% endif %}>English (UK)</option>
+                <option value="fr-FR" {% if loc == 'fr-FR' %}selected{% endif %}>French (FR)</option>
+                <option value="de-DE" {% if loc == 'de-DE' %}selected{% endif %}>German (DE)</option>
+                <option value="es-ES" {% if loc == 'es-ES' %}selected{% endif %}>Spanish (ES)</option>
             </select>
         </label>
     </div>

@@ -28,6 +28,7 @@ coverage/
 instance/
 *.sqlite3
 *.db
+static/branding/
 
 # OS artifacts
 .DS_Store

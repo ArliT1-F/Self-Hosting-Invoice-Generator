@@ -2,12 +2,12 @@
 {% block content %}
 <section class="card">
     <h2>Record payment for invoice #{{ invoice.id }}</h2>
-    <p class="form-help">Outstanding balance: {{ '{:.2f}'.format(balance) }} {{ invoice.currency }} (total {{ '{:.2f}'.format(total_due) }}).</p>
+<p class="form-help">Outstanding balance: {{ format_money(balance, invoice.currency, invoice.locale) }} (total {{ format_money(total_due, invoice.currency, invoice.locale) }}).</p>
     <form method="POST">
         <div class="form-grid">
             <label>
                 <span>Amount received</span>
-                <input type="number" name="amount" step="0.01" min="0.01" value="{{ '{:.2f}'.format(balance if balance > 0 else total_due) }}" required>
+            <input type="number" name="amount" step="0.01" min="0.01" value="{{ '%.2f' % (balance if balance > 0 else total_due) }}" required>
             </label>
             <label>
                 <span>Date received</span>

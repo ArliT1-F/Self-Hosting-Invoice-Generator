@@ -5,3 +5,4 @@ WeasyPrint
 Flask-Login
 Flask-Mail
 python-dateutil
+Babel
